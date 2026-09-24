@@ -409,6 +409,84 @@
     return cssText;
   }
 
+  // ?book-race=N (testing only): the first N draws of a snapshot with pictures
+  // leave the pictures out, the way WebKit's race does, so the check below can
+  // be exercised in any browser.
+  function raceDebug() { const n = +new URLSearchParams(location.search).get('book-race'); return n > 0 ? n : 0; }
+  async function strippedSnapshot(svg) {
+    const stripped = new Image();
+    stripped.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg.replace(/src="data:(?!image\/gif)[^"]*"/g, 'src="' + BLANK_IMAGE + '"'));
+    await stripped.decode(); return stripped;
+  }
+  // Small patches of each picture (8x8 device pixels), each with the colour
+  // and the amount of detail the picture itself has there. Averages, not
+  // single pixels, so the snapshot's resampling does not read as a mismatch.
+  // The most detailed patches of a 5x5 grid are used: a blank picture shows
+  // the flat box behind it, and a flat patch of a pale dashboard can have
+  // that same colour (measured: the Work dashboard's pale panels were within
+  // a few levels of its grey box), but not its detail.
+  const PATCH = 8;
+  async function pictureProbes(placed, scale, sheetTop, pageW, pageH) {
+    const probes = [];
+    const surface = document.createElement('canvas'); surface.width = surface.height = PATCH;
+    const g = surface.getContext('2d', { willReadFrequently: true });
+    for (const p of placed.slice(0, 6)) {
+      const picture = new Image(); picture.src = p.url;
+      try { await picture.decode(); } catch (_) { continue; }
+      const nw = picture.naturalWidth, nh = picture.naturalHeight;
+      if (!nw || !nh || p.w < 24 || p.h < 24) continue;
+      let dw = p.w, dh = p.h;
+      if (p.fit !== 'fill') {
+        const k = p.fit === 'cover' ? Math.max(p.w / nw, p.h / nh) : p.fit === 'none' ? 1 : p.fit === 'scale-down' ? Math.min(1, p.w / nw, p.h / nh) : Math.min(p.w / nw, p.h / nh);
+        dw = nw * k; dh = nh * k;
+      }
+      const [px, py] = (p.position || '50% 50%').split(/\s+/);
+      const offset = (v, room) => /%$/.test(v || '') ? room * parseFloat(v) / 100 : /px$/.test(v || '') ? parseFloat(v) : room / 2;
+      const ox = p.x + offset(px, p.w - dw), oy = p.y + offset(py, p.h - dh);
+      // What of the picture is visible: inside its box, and inside the sheet.
+      const left = Math.max(p.x, ox, 0), right = Math.min(p.x + p.w, ox + dw, pageW);
+      const top = Math.max(p.y, oy, sheetTop), bottom = Math.min(p.y + p.h, oy + dh, pageH);
+      if (right - left < 24 || bottom - top < 24) continue;
+      const found = [];
+      for (let gy = 0; gy < 5; gy++) for (let gx = 0; gx < 5; gx++) {
+        const fx = .1 + gx * .2, fy = .1 + gy * .2;
+        const x = Math.round((left + (right - left) * fx) * scale), y = Math.round((top + (bottom - top) * fy) * scale);
+        const span = PATCH / scale;   // the patch in CSS pixels
+        const sx = (x / scale - ox) / dw * nw, sy = (y / scale - oy) / dh * nh;
+        g.clearRect(0, 0, PATCH, PATCH);
+        g.drawImage(picture, sx, sy, span / dw * nw, span / dh * nh, 0, 0, PATCH, PATCH);
+        const want = patchOf(g.getImageData(0, 0, PATCH, PATCH).data);
+        if (want.mean[3] < 250) continue;   // see-through: its colour depends on what is behind
+        found.push({ x, y, want });
+      }
+      found.sort((a, b) => b.want.detail - a.want.detail);
+      probes.push(...found.filter(f => f.want.detail >= 6).slice(0, 5));
+    }
+    return probes;
+  }
+  // A patch's mean colour, and its detail: the standard deviation of its
+  // brightness.
+  function patchOf(data) {
+    const n = data.length / 4, mean = [0, 0, 0, 0];
+    let sum = 0, square = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      for (let c = 0; c < 4; c++) mean[c] += data[i + c];
+      const y = (data[i] * 2 + data[i + 1] * 5 + data[i + 2]) / 8;
+      sum += y; square += y * y;
+    }
+    return { mean: mean.map(v => v / n), detail: Math.sqrt(Math.max(0, square / n - (sum / n) ** 2)) };
+  }
+  // Drawn when most patches look like the picture: about its colour, and with
+  // at least half its detail.
+  function probesMatch(ctx, probes) {
+    let good = 0;
+    for (const p of probes) {
+      const have = patchOf(ctx.getImageData(p.x, p.y, PATCH, PATCH).data), a = have.mean, b = p.want.mean;
+      if (Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]) <= 36 && have.detail >= p.want.detail * .5) good++;
+    }
+    return good >= Math.ceil(probes.length * 0.6);
+  }
+
   function texture(index, fresh = false, low = false) {
     const source = pages[index], w = book.clientWidth, h = book.clientHeight;
     const hasSky=Boolean(source.querySelector('.ocean-surface'));
@@ -501,6 +579,15 @@
     // Work snapshot a 3.68 MB SVG (56 ms to decode) and fetched, resized and
     // re-encoded pictures that were off screen or in a hidden subtree.
     const originalBoxes = originals.map(img => { const r = img.getBoundingClientRect(); return inView(r, sheetView) ? null : [r.width, r.height]; });
+    // Where each picture sits in the snapshot, and how it is fitted in its box:
+    // with these, a WebKit snapshot can be checked for pictures left blank (see
+    // pictureProbes below).
+    const bookBox = book.getBoundingClientRect();
+    const originalPlaces = WEBKIT_SVG_RACE || raceDebug() ? originals.map(img => {
+      const r = img.getBoundingClientRect(), cs = getComputedStyle(img);
+      const flat = ['paddingTop','paddingRight','paddingBottom','paddingLeft','borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth'].every(k => parseFloat(cs[k]) === 0);
+      return flat ? { x: r.left - bookBox.left, y: r.top - bookBox.top, w: r.width, h: r.height, fit: cs.objectFit, position: cs.objectPosition } : null;
+    }) : [];
     source.hidden = hidden;
     clone.removeAttribute('hidden'); clone.removeAttribute('id'); clone.removeAttribute('style');
     clone.classList.remove('book-sheet'); clone.classList.add('paper-snapshot');
@@ -524,6 +611,7 @@
     // A copied <picture> would pick its <source> file over the inlined picture.
     clone.querySelectorAll('picture source').forEach(n=>n.remove());
     let embedded = 0;
+    const placed = [];
     const promise = (async () => {
       await Promise.all([...clone.querySelectorAll('img')].map(async (img,i)=>{
         // The copy's own src goes first: a copy of a lazy picture that is not
@@ -543,6 +631,7 @@
         if (/px$/.test(cssW) && /px$/.test(cssH)) Object.assign(img.style, { width: cssW, height: cssH });
         img.src = await embeddedImage(originals[i], originalSizes[i][0], originalSizes[i][1], scale);
         embedded++;
+        if (originalPlaces[i]) placed.push({ url: img.src, ...originalPlaces[i] });
       }));
       const embed=clone.querySelector('#spotify-embed, .hero-music');
       if(embed){const box=clone.querySelector('.hero-music');if(box)box.remove()}
@@ -591,24 +680,46 @@
       // unequal horizontal/vertical resampling of power-of-two snapshots.
       canvas.width = cw; canvas.height = ch;
       const ctx=canvas.getContext('2d');
-      if(water){
-        // The sheet's colour, then the water where the live canvas sits (fitted
-        // as its object-fit: cover is), then the page on top.
-        ctx.fillStyle=pageBackground.match(/rgba?\([^)]*\)|#[0-9a-f]{3,8}/i)?.[0]||skyBase||'#000';ctx.fillRect(0,0,cw,ch);
-        const k=Math.max(water.w/water.copy.width,water.h/water.copy.height);
-        const sw=water.w/k,sh=water.h/k,sx=(water.copy.width-sw)/2,sy=(water.copy.height-sh)/2;
-        ctx.drawImage(water.copy,sx,sy,sw,sh,water.x*scale,water.y*scale,water.w*scale,water.h*scale);
-      }
+      const paint=(picture=image)=>{
+        ctx.clearRect(0,0,cw,ch);
+        if(water){
+          // The sheet's colour, then the water where the live canvas sits (fitted
+          // as its object-fit: cover is), then the page on top.
+          ctx.fillStyle=pageBackground.match(/rgba?\([^)]*\)|#[0-9a-f]{3,8}/i)?.[0]||skyBase||'#000';ctx.fillRect(0,0,cw,ch);
+          const k=Math.max(water.w/water.copy.width,water.h/water.copy.height);
+          const sw=water.w/k,sh=water.h/k,sx=(water.copy.width-sw)/2,sy=(water.copy.height-sh)/2;
+          ctx.drawImage(water.copy,sx,sy,sw,sh,water.x*scale,water.y*scale,water.w*scale,water.h*scale);
+        }
+        ctx.drawImage(picture,0,0);
+      };
       // WebKit can draw an SVG before the pictures inlined in it have decoded,
       // leaving them blank on the first draw (WebKit bug 39059, open since
       // 2010). A throwaway draw starts their decoding; the real one follows.
-      if (embedded && WEBKIT_SVG_RACE) {
+      // A fixed wait was not always enough: on an iPhone, the Work snapshot
+      // made just after landing (when the page is busy) kept its dashboard
+      // blank, and that blank sheet then turned. So the drawn snapshot is now
+      // checked where its pictures should be, and drawn again until they are
+      // there (at most about a second; then it is used as it is).
+      const race=raceDebug();
+      if (embedded && (WEBKIT_SVG_RACE || race)) {
         const prime = document.createElement('canvas'); prime.width = prime.height = 1;
         prime.getContext('2d').drawImage(image, 0, 0);
-        await new Promise(resolve => setTimeout(resolve, 120));
-        prime.getContext('2d').drawImage(image, 0, 0);
-      }
-      ctx.drawImage(image,0,0);
+        // The patches are worked out during the first wait, not before it.
+        const first = new Promise(resolve => setTimeout(resolve, 120));
+        const probes = await pictureProbes(placed, scale, sheetTop, w, h);
+        const blank = race ? await strippedSnapshot(svg) : null;
+        await first;
+        let tries = 0;
+        for (;;) {
+          if (tries) await new Promise(resolve => setTimeout(resolve, 90));
+          prime.getContext('2d').drawImage(image, 0, 0);
+          paint(blank && tries < race ? blank : image);
+          if (!probes.length || probesMatch(ctx, probes) || tries >= 9) break;
+          tries++;
+        }
+        if (tries) book.dataset.snapshotRedraws = String((+book.dataset.snapshotRedraws || 0) + tries);
+        if (race) (window.__snapshotLog ||= []).push({ page: ids[index], low, probes: probes.length, tries });
+      } else paint();
       if(!low&&new URLSearchParams(location.search).has('book-debug')){
         document.querySelector('[data-book-snapshot="'+ids[index]+'"]')?.remove();
         const diagnostic=new Image();diagnostic.src=canvas.toDataURL();
@@ -1162,7 +1273,13 @@
   // keep yesterday's numbers until something else invalidated it.
   document.addEventListener('sun:changed', () => cache.delete(ids.indexOf('contact')));
   const invalidateWorkMedia = event => {
-    if (event.target.closest?.('.work-exhibition')) { cache.delete(ids.indexOf('work')); if (!active) scheduleWarm(); }
+    // A picture with a set width and height does not change the snapshot when it
+    // loads: the snapshot inlines the file itself and the box was already that
+    // size. Redrawing Work on every such load put a fresh snapshot (and, in
+    // WebKit, a chance of a blank dashboard) right after each arrival on Work.
+    const target = event.target;
+    if (event.type === 'load' && target.tagName === 'IMG' && target.getAttribute('width') && target.getAttribute('height')) return;
+    if (target.closest?.('.work-exhibition')) { cache.delete(ids.indexOf('work')); if (!active) scheduleWarm(); }
   };
   ['load', 'loadeddata', 'seeked', 'pause'].forEach(name => book.addEventListener(name, invalidateWorkMedia, true));
   book.addEventListener('scroll',event=>{

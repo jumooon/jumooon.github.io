@@ -1,5 +1,14 @@
 # Portfolio page-turn handoff — 2026-09-16
 
+## 2026-09-25 — Phone: Work dashboard no longer blanks at a turn
+
+User's iPhone screen recording (13:54, 60 fps, checked frame by frame): on Work, pressing next showed the page with the dashboard picture as an empty grey box. The same blank sheet then turned. Coming back to Work, the page landed blank and the picture popped in about 0.2 s later. The Home→Work turn just before had the picture, so only some snapshots were affected.
+- Likely cause: WebKit's SVG race (bug 39059). The fixed 120 ms wait after the prime draw was not always enough. The Work snapshot was redrawn right after arriving, when the page is busy, because the dashboard's `load` event invalidated it.
+- Fix 1, book.js `pictureProbes` / `probesMatch`: in WebKit, a snapshot with inlined pictures is now checked after drawing. The check uses 8x8 patches of each picture, choosing the most detailed of a 5x5 grid, and compares both colour and detail. A colour-only check failed: the pale dashboard matched its grey box. If a picture is blank, the snapshot is drawn again every 90 ms, at most 9 times, then used as it is. Chromium and Firefox keep the old single draw, so their pixels are unchanged.
+- Fix 2, `invalidateWorkMedia`: a picture with a set width and height no longer drops the Work snapshot when it loads. The snapshot inlines the file itself, and the box does not change.
+- Testing: `?book-race=N` blanks the first N draws in any browser and logs to `window.__snapshotLog`. Headless Chromium, phone, Home→Contact→Home: exactly N redraws per snapshot with pictures (N = 1, 3), and 9 for N = 50. There were no extra redraws, so no false alarms. Desktop pages are pixel-identical to before in Chromium. Not verified in real WebKit here.
+- tests/book-webkit-race.test.cjs is new. book.js?v=20260925-race.
+
 ## 2026-09-25 — Phone: Tableau dashboards open as a zoomable picture
 
 On a phone, Tableau's own phone layout spilled off the screen (checked in a 390px frame). So on phones, "Explore dashboard" (Work list and case page) and a tap on the dashboard picture now open a full-screen viewer (work-preview.js `zoomView`, styles at the end of book-phone.css). The viewer shows the full-size WebP, falling back to the PNG. It fits the picture to the screen. Pinch, or double-tap for 2.5x, to zoom (5x at most). Drag to pan. "Close" leaves the viewer. It uses `touch-action:none`, so the page underneath never scrolls or zooms. The Shiny deck link ("View presentation") still opens the live deck.

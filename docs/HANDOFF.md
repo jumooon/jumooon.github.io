@@ -1,5 +1,35 @@
 # Portfolio page-turn handoff — 2026-09-16
 
+## 2026-09-25 — Load weight, snapshot cost, phone riffle
+
+- Startup bytes on a phone (390x844, measured in headless Chromium): 4.73 MB
+  -> 0.70 MB. Three causes, all fixed:
+  1. Every sheet sat on screen until book.js hid them, so lazy pictures on all
+     pages loaded. index.html now marks every sheet but Home `hidden`; a small
+     inline script shows a deep-linked page instead (#work, #contact,
+     #work/<case> verified from first paint, desktop and phone). notebook.css:
+     `.book > [hidden]` guard (footer is display:flex).
+  2. work-preview.js set `src` before `loading="lazy"`, so exhibit images
+     downloaded at once; now loading first, posters lazy too.
+  3. texture() removed `loading` from cloned <img>s while they still held their
+     src, so every snapshot re-downloaded every picture on its page (desktop
+     too). The copy's src is blanked first.
+- embeddedImage(): a picture not loaded yet is embedded from the smallest
+  srcset file big enough (srcsetOf) or read for its size and resized; the
+  About portrait no longer inlines its 650 KB 2100px file (snapshot SVG
+  889 KB before). tests/book-raster updated for the new signature.
+- Snapshots never show the phone menu (header clone drops menu-open).
+- Phone riffle: a jump turns one sheet per page (Home->Contact: 5), each 760 ms,
+  230 ms apart; 950 ms for one page. The page seen at rest (current going
+  forward, destination going back) is a device-resolution snapshot; pages in
+  between are 1x copies (texture(i, false, true), lowCache), made when the
+  menu opens (warmLow) since only the menu can ask for a jump. The renderer
+  draws a stack bottom-first, skipping sheets hidden under a flat one; texture
+  budget 32 MB / 9 textures, current turn pinned.
+- A forward turn also decodes the destination's visible pictures before the
+  sheet lifts (they are uncovered live).
+- Long tasks at first load (4x CPU throttle): longest 286 -> 182 ms.
+
 ## 2026-09-25 — Phones: set turns only, room guide, menu behind three lines
 
 - The page no longer follows the finger. Every phone turn is the same set

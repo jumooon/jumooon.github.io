@@ -21,7 +21,7 @@
    cacheImage() with idle snapshots. Load this file before book.js. */
 window.createBookPhone = function(core) {
   'use strict';
-  const {book,header,cache,reduced,narrow,narrowMqListen,detailOpen,finish,syncOcean,updateHeader,texture,preparePageImages,navigate}=core;
+  const {book,header,cache,reduced,narrow,warmLow,narrowMqListen,detailOpen,finish,syncOcean,updateHeader,texture,preparePageImages,navigate}=core;
 
   // ---- The slide (if the curl is unavailable) --------------------------------
   // One sheet, slid rather than curled. Going
@@ -222,8 +222,9 @@ window.createBookPhone = function(core) {
     const U=loc(sheet,['size','axisPoint','axisNormal','radius','persp','page','paper']);
     const S=loc(shade,['size','scale','axisPoint','axisNormal','radius','strength']);
     const uvLoc=gl.getAttribLocation(sheet,'uv'),cornerLoc=gl.getAttribLocation(shade,'corner');
-    // Uploaded snapshots, newest last. The one in use is never evicted.
-    const textures=new Map();let bound=null,scale=1,W=0,H=0,textureBytes=0;
+    // Uploaded snapshots, newest last. The ones in the turn being drawn are
+    // pinned and never evicted; the rest stay within a count and a byte budget.
+    const textures=new Map();let pinned=new Set(),scale=1,textureBytes=0;
     function cacheImage(image){
       if(textures.has(image)){const t=textures.get(image);textures.delete(image);textures.set(image,t);return t}
       const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
@@ -236,8 +237,10 @@ window.createBookPhone = function(core) {
       gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
       if(aniso)gl.texParameterf(gl.TEXTURE_2D,aniso.TEXTURE_MAX_ANISOTROPY_EXT,Math.min(8,gl.getParameter(aniso.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));
       textures.set(image,t);textureBytes+=image.width*image.height*4;
-      while(textures.size>1&&(textures.size>3||textureBytes>32*1024*1024)){
-        const [old,tex]=[...textures].find(([img])=>img!==bound&&img!==image)||[];
+      // Three pages at device resolution and a set of 1x riffle pages fit well
+      // inside 32 MB (a 390x844 phone page is 5.3 MB at 2x, 1.3 MB at 1x).
+      while(textures.size>1&&(textures.size>9||textureBytes>32*1024*1024)){
+        const [old,tex]=[...textures].find(([img])=>!pinned.has(img)&&img!==image)||[];
         if(!old)break;
         gl.deleteTexture(tex);textures.delete(old);textureBytes-=old.width*old.height*4;
       }
@@ -245,32 +248,41 @@ window.createBookPhone = function(core) {
     }
     return {
       canvas,cacheImage,
-      // Bind a page, size the canvas to the book, and set the paper colour.
-      prepare(image,w,h,paper){
-        bound=image;W=w;H=h;scale=Math.min(devicePixelRatio||1,2);
+      // Size the canvas to the book and keep this turn's pages resident.
+      begin(images,w,h){
+        pinned=new Set(images);images.forEach(cacheImage);
+        scale=Math.min(devicePixelRatio||1,2);
         const cw=Math.round(w*scale),ch=Math.round(h*scale);
         if(canvas.width!==cw)canvas.width=cw;if(canvas.height!==ch)canvas.height=ch;
         gl.viewport(0,0,cw,ch);
-        gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,cacheImage(image));
-        gl.useProgram(sheet);gl.uniform2f(U.size,w,h);gl.uniform1f(U.persp,Math.max(2400,w*6));gl.uniform1i(U.page,0);gl.uniform3fv(U.paper,paper);
+        gl.useProgram(sheet);gl.uniform2f(U.size,w,h);gl.uniform1f(U.persp,Math.max(2400,w*6));gl.uniform1i(U.page,0);
         gl.useProgram(shade);gl.uniform2f(S.size,w,h);gl.uniform1f(S.scale,scale);
       },
-      draw(f,D){
+      end(){pinned=new Set()},
+      // Draw a stack of sheets, bottom first: each one's shadow falls on what is
+      // already drawn, then the sheet itself (depth-tested only against itself,
+      // so its roll lies over its own face but never behind the sheet below).
+      draw(stack){
         gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
-        const R=f.R;
-        if(R>0){
-          gl.useProgram(shade);gl.disable(gl.DEPTH_TEST);gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
-          gl.uniform2f(S.axisPoint,f.P.x,f.P.y);gl.uniform2f(S.axisNormal,f.n.x,f.n.y);gl.uniform1f(S.radius,R);
-          gl.uniform1f(S.strength,.24*Math.min(1,D/60));
-          gl.bindBuffer(gl.ARRAY_BUFFER,quad);gl.enableVertexAttribArray(cornerLoc);gl.vertexAttribPointer(cornerLoc,2,gl.FLOAT,false,0,0);
-          gl.drawArrays(gl.TRIANGLE_STRIP,0,4);gl.disableVertexAttribArray(cornerLoc);
+        gl.activeTexture(gl.TEXTURE0);
+        for(const s of stack){
+          const f=s.fold,R=f.R;
+          if(R>0){
+            gl.useProgram(shade);gl.disable(gl.DEPTH_TEST);gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
+            gl.uniform2f(S.axisPoint,f.P.x,f.P.y);gl.uniform2f(S.axisNormal,f.n.x,f.n.y);gl.uniform1f(S.radius,R);
+            gl.uniform1f(S.strength,.24*Math.min(1,s.D/60));
+            gl.bindBuffer(gl.ARRAY_BUFFER,quad);gl.enableVertexAttribArray(cornerLoc);gl.vertexAttribPointer(cornerLoc,2,gl.FLOAT,false,0,0);
+            gl.drawArrays(gl.TRIANGLE_STRIP,0,4);gl.disableVertexAttribArray(cornerLoc);
+          }
+          gl.clear(gl.DEPTH_BUFFER_BIT);
+          gl.useProgram(sheet);gl.disable(gl.BLEND);gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);
+          gl.bindTexture(gl.TEXTURE_2D,cacheImage(s.image));gl.uniform3fv(U.paper,s.paper);
+          gl.uniform2f(U.axisPoint,f.P.x,f.P.y);gl.uniform2f(U.axisNormal,f.n.x,f.n.y);gl.uniform1f(U.radius,R);
+          gl.bindBuffer(gl.ARRAY_BUFFER,uvBuffer);gl.enableVertexAttribArray(uvLoc);gl.vertexAttribPointer(uvLoc,2,gl.FLOAT,false,0,0);
+          gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,indexBuffer);
+          gl.drawElements(gl.TRIANGLES,index.length,gl.UNSIGNED_SHORT,0);
+          gl.disableVertexAttribArray(uvLoc);
         }
-        gl.useProgram(sheet);gl.disable(gl.BLEND);gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);
-        gl.uniform2f(U.axisPoint,f.P.x,f.P.y);gl.uniform2f(U.axisNormal,f.n.x,f.n.y);gl.uniform1f(U.radius,R);
-        gl.bindBuffer(gl.ARRAY_BUFFER,uvBuffer);gl.enableVertexAttribArray(uvLoc);gl.vertexAttribPointer(uvLoc,2,gl.FLOAT,false,0,0);
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,indexBuffer);
-        gl.drawElements(gl.TRIANGLES,index.length,gl.UNSIGNED_SHORT,0);
-        gl.disableVertexAttribArray(uvLoc);
       }
     };
   }
@@ -279,38 +291,56 @@ window.createBookPhone = function(core) {
     const m=getComputedStyle(el).backgroundColor.match(/[\d.]+/g);
     return m&&m.length>=3?m.slice(0,3).map(n=>Number(n)/255):[0.98,0.99,0.99];
   }
-  // A set turn: the menu, a room-guide arrow, Back/Forward, a quick swipe.
-  // opts.C / opts.n: the lifted point and the fold's direction.
+  // A turn: one sheet per page between here and the destination, so a jump of
+  // several pages riffles through them. Going forward the sheets are this page
+  // and the ones after it, each lifting in turn off the live destination; going
+  // back they are the pages before it, arriving one on top of the other, the
+  // destination last. This page (forward) and the destination (back) are drawn
+  // from device-resolution snapshots — they are the ones seen at rest; the
+  // pages in between are seen in passing and use 1x copies. opts.C / opts.n:
+  // the lifted point and the fold's direction (the bottom corner leads).
   function beginCurl(target,opts={}){
-    const from=core.current,forward=target>from,sheetIndex=forward?from:target;
+    const from=core.current,forward=target>from;
     const w=book.clientWidth,h=book.clientHeight,rMax=Math.max(26,Math.min(60,w*.13));
-    const C=opts.C||{x:w,y:h*.8},n=opts.n||norm(1,TILT);
-    const state={curl:true,from,target,destination:target,forward,w,h,C,n,rMax,ready:false,D:0,
-      fold(){return foldFor(C,n,state.D,rMax)},
-      gone(){return goneAt(C,n,rMax,h)}};
-    state.D=forward?0:state.gone();
-    // Going forward the next page is live beneath: show it now, under the
+    const C=opts.C||{x:w,y:h*.8},n=opts.n||norm(1,TILT),gone=goneAt(C,n,rMax,h);
+    const indices=[];
+    if(forward)for(let i=from;i<target;i++)indices.push(i);else for(let i=from-1;i>=target;i--)indices.push(i);
+    const key=forward?from:target;
+    // Stack, bottom first; `order` is when each one moves (0 = first).
+    const sheets=indices.map((index,order)=>({index,order,D:forward?0:gone})).sort((a,b)=>b.index-a.index);
+    const state={curl:true,from,target,destination:target,forward,w,h,C,n,rMax,gone,sheets,ready:false,
+      fold(D){return foldFor(C,n,D,rMax)},
+      draw(){
+        // A sheet lying flat hides everything below it; a gone one shows nothing.
+        let first=0;
+        for(let i=sheets.length-1;i>=0;i--)if(sheets[i].D<=0){first=i;break}
+        state.r.draw(sheets.slice(first).filter(s=>s.D<gone).map(s=>({image:s.image,paper:s.paper,D:s.D,fold:foldFor(C,n,s.D,rMax)})));
+      }};
+    // Going forward the destination is live beneath: show it now, under the
     // current page, so its first layout is done before the sheet lifts.
     const incoming=core.pages[target],outgoing=core.pages[from];
     if(forward){incoming.hidden=false;incoming.scrollTop=core.scrollPositions[target];incoming.style.zIndex='1';outgoing.style.zIndex='2'}
     incoming.inert=true;outgoing.inert=true;
     // A live Home is drawn with moving water, so its snapshot is taken afresh —
     // unless a finger on the menu or the guide has just taken it (holdHome).
-    if(sheetIndex===core.current&&core.ids[sheetIndex]==='hero'&&!heldRecently())cache.delete(sheetIndex);
+    if(key===core.current&&core.ids[key]==='hero'&&!heldRecently())cache.delete(key);
     (async()=>{
-      await preparePageImages(sheetIndex);
+      // The key page's pictures, and (forward) the destination's, decoded first:
+      // the destination is uncovered live, and a picture decoding under the
+      // turning sheet would hold up its frames.
+      await Promise.all([preparePageImages(key),forward?preparePageImages(target):null]);
       if(core.active!==state)return;
-      const image=await texture(sheetIndex);
+      await Promise.all(sheets.map(async s=>{s.image=await texture(s.index,false,s.index!==key);s.paper=paperOf(core.pages[s.index])}));
       if(core.active!==state)return;
-      const r=renderer();
-      r.prepare(image,w,h,paperOf(core.pages[sheetIndex]));
-      r.draw(state.fold(),state.D);
+      const r=renderer();state.r=r;
+      r.begin(sheets.map(s=>s.image),w,h);
+      state.draw();
       // The overlay covers the book only (the room guide below it stays live).
       const overlay=document.createElement('div');overlay.className='paper-turn';
       overlay.inert=true;overlay.setAttribute('aria-hidden','true');
       const box=book.getBoundingClientRect();
       Object.assign(overlay.style,{top:box.top+'px',height:box.height+'px',bottom:'auto'});
-      overlay.append(r.canvas);document.body.append(overlay);state.overlay=overlay;state.r=r;
+      overlay.append(r.canvas);document.body.append(overlay);state.overlay=overlay;
       if(forward){outgoing.style.visibility='hidden';updateHeader(target);syncGuide(target)}
       book.classList.add('is-page-turning');
       state.ready=true;
@@ -322,32 +352,51 @@ window.createBookPhone = function(core) {
       state.target=state.destination=state.from;finish(true);
       if(state.peek)peekSlide();else slideTo(target);
     });
+    state.cleanup=()=>state.r?.end();
     return state;
   }
+  // Moves the single sheet of a one-page turn (the first-visit dog-ear).
   function animateD(state,to,ms,ease,done){
-    const from=state.D;let start;
+    const s=state.sheets[0],from=s.D;let start;
     cancelAnimationFrame(core.raf);
     function step(ts){
       if(core.active!==state)return;
       if(start===undefined)start=ts;
       const k=ms>0?Math.min(1,(ts-start)/ms):1;
-      state.D=from+(to-from)*ease(k);
-      state.r.draw(state.fold(),state.D);
+      s.D=from+(to-from)*ease(k);state.draw();
       if(k<1)core.raf=requestAnimationFrame(step);else done();
     }
     core.raf=requestAnimationFrame(step);
   }
   function endCurl(state,commit){
     if(core.active!==state)return;
-    if(commit)book.dataset.lastTurn=JSON.stringify({mode:'curl',from:core.ids[state.from],to:core.ids[state.target]});
+    if(commit)book.dataset.lastTurn=JSON.stringify({mode:'curl',from:core.ids[state.from],to:core.ids[state.target],sheets:state.sheets.length});
     else state.target=state.destination=state.from;
     finish();
   }
-  // The bottom corner leads, as a right hand turning a page would.
+  // A whole turn. One page: 950 ms. A jump: each sheet takes 760 ms and the
+  // next starts 230 ms after the one before, so the pages fan through.
+  const RIFFLE_MS=760,RIFFLE_GAP=230;
   function curlTo(target){
     const state=beginCurl(target);core.active=state;syncOcean();
     book.setAttribute('aria-busy','true');
-    state.onReady=()=>animateD(state,state.forward?state.gone():0,CURL_MS,easeInOut,()=>endCurl(state,true));
+    state.onReady=()=>{
+      const count=state.sheets.length,dur=count===1?CURL_MS:RIFFLE_MS,total=dur+(count-1)*RIFFLE_GAP;
+      let start;
+      cancelAnimationFrame(core.raf);
+      function step(ts){
+        if(core.active!==state)return;
+        if(start===undefined)start=ts;
+        const t=ts-start;
+        for(const s of state.sheets){
+          const e=easeInOut(Math.max(0,Math.min(1,(t-s.order*RIFFLE_GAP)/dur)));
+          s.D=state.forward?e*state.gone:(1-e)*state.gone;
+        }
+        state.draw();
+        if(t<total)core.raf=requestAnimationFrame(step);else endCurl(state,true);
+      }
+      core.raf=requestAnimationFrame(step);
+    };
   }
 
   // ---- Home's snapshot, taken at the touch ------------------------------------
@@ -399,7 +448,7 @@ window.createBookPhone = function(core) {
     if(open&&!narrow())return;
     header.classList.toggle('menu-open',open);menu.hidden=!open;
     toggle.setAttribute('aria-expanded',String(open));toggle.setAttribute('aria-label',open?'Close menu':'Menu');
-    if(open)menu.querySelector('[aria-current]')?.focus({preventScroll:true});
+    if(open){menu.querySelector('[aria-current]')?.focus({preventScroll:true});warmLow()}
   }
   function buildMenu(){
     menu.replaceChildren(...core.ids.map((id,i)=>{

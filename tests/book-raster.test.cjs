@@ -22,6 +22,9 @@ assert(/mipmapped\?gl\.LINEAR_MIPMAP_LINEAR:gl\.LINEAR/.test(source),'WebGL1 NPO
 assert(source.includes('EXT_texture_filter_anisotropic'));
 assert(source.includes('GL_FRAGMENT_PRECISION_HIGH'),'Texture coordinates need highp where available');
 // Embedded images are sized to their displayed width times the raster scale.
-assert(/embeddedImage\(img, displayedWidth, displayedHeight\)/.test(source),'Embeds are sized by the rendered (object-fit) image');
+assert(/embeddedImage\(img, displayedWidth, displayedHeight[,)]/.test(source),'Embeds are sized by the rendered (object-fit) image');
+// A picture not loaded yet (a phone leaves hidden pages unloaded) is taken from
+// the smallest big-enough srcset file, not the full-size src.
+assert(/function srcsetOf\(img\)/.test(source)&&/if \(!img\.currentSrc\)/.test(source),'Unloaded pictures are embedded from a srcset file sized to the page');
 assert(source.includes('createImageBitmap'));
 console.log('PASS: shared native-resolution scale, bounded memory, mipmapped sampling and display-sized embeds');

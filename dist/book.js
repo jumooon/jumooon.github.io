@@ -38,7 +38,16 @@
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   // Phones: the same 760px line the stylesheets use (see book-phone.js).
   const narrowMq = matchMedia('(max-width: 760px)'), narrow = () => narrowMq.matches;
-  const cache = new Map(), images = new Map();
+  // Snapshots. `cache` holds them at device resolution; `lowCache` at 1x, for
+  // the pages a phone's riffle only shows in passing. Invalidating a page
+  // (cache.delete / clear, used throughout) drops both.
+  const lowCache = new Map();
+  const cache = new (class extends Map {
+    delete(key) { lowCache.delete(key); return super.delete(key); }
+    clear() { lowCache.clear(); super.clear(); }
+  })();
+  const images = new Map();
+  const dropFrom = (store, key) => Map.prototype.delete.call(store, key);
   let current = 0, queued = null, active = null, raf = 0, revision = 0, warmTimer;
   let renderer, warming = false, rewarm = false, arrowsApi = null, holdingHome = false;
   const BLANK_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
@@ -292,14 +301,30 @@
   // Embed images at their displayed size times the raster scale, not at the
   // original file size: the 2433px portrait otherwise becomes a 1.6 MB data URL
   // inside every About snapshot (serialize + decode on each rasterization).
-  async function embeddedImage(img, displayedWidth, displayedHeight) {
-    const src = img.currentSrc || img.src;
-    const scale = rasterScale(book.clientWidth, book.clientHeight, devicePixelRatio);
-    const natural = img.naturalWidth || 0;
+  // The srcset candidates of an <img>, as [{url, w}], smallest first.
+  function srcsetOf(img) {
+    return (img.getAttribute('srcset') || '').split(',').map(part => part.trim().split(/\s+/))
+      .filter(([url, d]) => url && /^\d+w$/.test(d || '')).map(([url, d]) => ({ url, w: parseInt(d, 10) }))
+      .sort((a, b) => a.w - b.w);
+  }
+  async function embeddedImage(img, displayedWidth, displayedHeight, scale = rasterScale(book.clientWidth, book.clientHeight, devicePixelRatio)) {
+    let src = img.currentSrc || img.src;
+    let natural = img.naturalWidth || 0;
+    // The picture's shape, from the loaded image or, before it has loaded (a
+    // phone leaves pictures on hidden pages unloaded), from its width/height.
+    const aw = +img.getAttribute('width') || 0, ah = +img.getAttribute('height') || 0;
+    const ratio = natural && img.naturalHeight ? natural / img.naturalHeight : (aw && ah ? aw / ah : 0);
     // object-fit: cover scales the image to the larger of the box's two demands,
     // so size by the rendered image, not the box width (the 4:5 portrait box shows
     // a landscape photo scaled to its height and cropped at the sides).
-    const rendered = Math.max(displayedWidth || 0, natural && img.naturalHeight ? (displayedHeight || 0) * natural / img.naturalHeight : 0) || natural;
+    const rendered = Math.max(displayedWidth || 0, ratio ? (displayedHeight || 0) * ratio : 0) || natural;
+    // Not loaded yet: take the smallest srcset file that is big enough, instead of
+    // the src (the About portrait inlined its 650 KB 2100px file on a phone).
+    if (!img.currentSrc) {
+      const want = Math.ceil(Math.max(1, rendered) * scale), list = srcsetOf(img);
+      const pick = list.find(c => c.w >= want) || list[list.length - 1];
+      if (pick) { src = new URL(pick.url, location.href).href; natural = pick.w; }
+    }
     const targetWidth = Math.min(natural || Infinity, Math.ceil(Math.max(1, rendered) * scale));
     const key = src + '@' + targetWidth;
     if (images.has(key)) { const hit = images.get(key); images.delete(key); images.set(key, hit); return hit; }
@@ -311,23 +336,31 @@
       const response = await fetch(src);
       if (!response.ok) throw new Error('Page image unavailable');
       const blob = await response.blob();
+      if (typeof createImageBitmap !== 'function') return readAsDataURL(blob);
+      // A picture that has not loaded has no known size: read it from the file.
+      let height0 = img.naturalHeight || 0;
+      if (!natural || !height0) {
+        const probe = await createImageBitmap(blob);
+        natural = natural || probe.width; height0 = probe.height * natural / probe.width; probe.close();
+      }
+      const fit = Math.min(natural, targetWidth);
       // Within 2x of the displayed size the original file is inlined as is, so the
       // browser scales the same pixels it scales on the live page; a re-encoded
       // copy left faint differences that flickered at the handoff (Collection).
-      if (!natural || natural <= targetWidth * 2 || typeof createImageBitmap !== 'function') return readAsDataURL(blob);
+      if (natural <= fit * 2) return readAsDataURL(blob);
       const type = /\.png(\?|$)/i.test(src) ? 'image/png' : 'image/jpeg';
       // Resize and encode off the main thread where the browser can: a canvas
       // toDataURL() here was a synchronous encode inside every warm-up pass.
       if (typeof OffscreenCanvas === 'function') {
-        const height = Math.max(1, Math.round((img.naturalHeight || natural) * targetWidth / natural));
-        const scaled = await createImageBitmap(blob, { resizeWidth: targetWidth, resizeHeight: height, resizeQuality: 'high' });
-        const surface = new OffscreenCanvas(targetWidth, height);
+        const height = Math.max(1, Math.round(height0 * fit / natural));
+        const scaled = await createImageBitmap(blob, { resizeWidth: fit, resizeHeight: height, resizeQuality: 'high' });
+        const surface = new OffscreenCanvas(fit, height);
         surface.getContext('2d').drawImage(scaled, 0, 0); scaled.close();
         return readAsDataURL(await surface.convertToBlob({ type, quality: 0.92 }));
       }
       const bitmap = await createImageBitmap(blob);
       const canvas = document.createElement('canvas');
-      canvas.width = targetWidth; canvas.height = Math.max(1, Math.round(bitmap.height * targetWidth / bitmap.width));
+      canvas.width = fit; canvas.height = Math.max(1, Math.round(bitmap.height * fit / bitmap.width));
       canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height); bitmap.close();
       return canvas.toDataURL(type, 0.92);
     })();
@@ -372,7 +405,7 @@
     return cssText;
   }
 
-  function texture(index, fresh = false) {
+  function texture(index, fresh = false, low = false) {
     const source = pages[index], w = book.clientWidth, h = book.clientHeight;
     const hasSky=Boolean(source.querySelector('.ocean-surface'));
     if(hasSky)syncPlaces();
@@ -380,15 +413,15 @@
     const headerHeight=header.offsetHeight;
     // The hero sheet runs under the transparent menu bar; other sheets start below it.
     const sheetTop=source.classList.contains('hero')?0:headerHeight,contentHeight=h-sheetTop;
-    const scale=rasterScale(w,h,devicePixelRatio);
+    const scale=low?1:rasterScale(w,h,devicePixelRatio), store=low?lowCache:cache;
     // skyKey changes every minute; folding it into every page's key threw the whole
     // cache away that often and made the next turn re-rasterise. Only the page that
     // actually draws the sky depends on it.
     const sky = hasSky ? ocean.skyKey+':clock:'+Math.floor(Date.now()/60000) : '';
     const key = [w,h,scale,headerHeight,scroll,revision,sky].join(':');
-    const hit = cache.get(index);
+    const hit = store.get(index);
     if (!fresh && hit && hit.key === key) {
-      cache.delete(index);cache.set(index,hit);return hit.promise;
+      dropFrom(store,index);store.set(index,hit);return hit.promise;
     }
     // Capture layout synchronously, restoring hidden state before browser paint.
     const hidden = source.hidden;
@@ -473,10 +506,18 @@
       if(on)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');
     });
     headerClone.querySelectorAll('[id]').forEach(n=>n.removeAttribute('id'));
+    // A page is always pictured with the phone menu closed: the snapshot may be
+    // taken while it is open (the tap on a room, or 1x copies made as it opens).
+    headerClone.classList.remove('menu-open');
+    headerClone.querySelector('.room-menu')?.setAttribute('hidden','');
     skyText.forEach(([n,v])=>headerClone.style.setProperty(n,v));
     const css = snapshotCss();
     const promise = (async () => {
       await Promise.all([...clone.querySelectorAll('img')].map(async (img,i)=>{
+        // The copy's own src goes first: a copy of a lazy picture that is not
+        // loaded yet starts fetching the full file the moment it stops being
+        // lazy, and every snapshot downloaded every picture on its page.
+        img.src = BLANK_IMAGE;
         img.removeAttribute('srcset'); img.removeAttribute('sizes');
         img.removeAttribute('loading');
         const box = originalBoxes[i];
@@ -484,7 +525,7 @@
           Object.assign(img.style, { boxSizing: 'border-box', width: box[0] + 'px', height: box[1] + 'px' });
           img.src = BLANK_IMAGE; return;
         }
-        img.src = await embeddedImage(originals[i], originalSizes[i][0], originalSizes[i][1]);
+        img.src = await embeddedImage(originals[i], originalSizes[i][0], originalSizes[i][1], scale);
       }));
       const embed=clone.querySelector('#spotify-embed, .hero-music');
       if(embed){const box=clone.querySelector('.hero-music');if(box)box.remove()}
@@ -542,19 +583,36 @@
         ctx.drawImage(water.copy,sx,sy,sw,sh,water.x*scale,water.y*scale,water.w*scale,water.h*scale);
       }
       ctx.drawImage(image,0,0);
-      if(new URLSearchParams(location.search).has('book-debug')){
+      if(!low&&new URLSearchParams(location.search).has('book-debug')){
         document.querySelector('[data-book-snapshot="'+ids[index]+'"]')?.remove();
         const diagnostic=new Image();diagnostic.src=canvas.toDataURL();
         diagnostic.dataset.bookSnapshot=ids[index];diagnostic.hidden=true;document.body.append(diagnostic);
       }
       return canvas;
     })();
-    cache.set(index,{key,promise});
-    while(cache.size>(narrow()?3:6))cache.delete(cache.keys().next().value);
-    promise.catch(()=>{if(cache.get(index)?.promise===promise)cache.delete(index)});
+    store.set(index,{key,promise});
+    while(store.size>(low?6:narrow()?3:6))dropFrom(store,store.keys().next().value);
+    promise.catch(()=>{if(store.get(index)?.promise===promise)dropFrom(store,index)});
     return promise;
   }
 
+  // A phone's riffle (a jump of several pages, from the menu) turns one sheet
+  // per page, and the ones in between are only seen in passing: 1x copies, a
+  // quarter of the pixels. They are made when the menu opens — the only way to
+  // ask for a jump — one at a time, rather than on every visit.
+  let warmingLow = false;
+  async function warmLow() {
+    if (warmingLow || !narrow() || !phone) return;
+    warmingLow = true;
+    try {
+      for (let index = 0; index < pages.length; index++) {
+        if (index === current) continue;
+        if (active || detailOpen() || document.hidden) return;
+        try { phone.cacheImage(await texture(index, false, true)); } catch { /* The riffle makes it on the tap. */ }
+        await new Promise(resolve => setTimeout(resolve, 40));
+      }
+    } finally { warmingLow = false; }
+  }
   async function warm() {
     // A request that arrives mid-pass (the Work sheet changing while an earlier
     // pass is still rasterising) is remembered and run after it, not dropped:
@@ -591,6 +649,7 @@
         await new Promise(resolve=>setTimeout(resolve,50));
       } catch { /* Retry on actual navigation. */ }
     }
+
     } catch { /* Navigation has a no-animation fallback. */ }
     finally { warming = false; if (rewarm) { rewarm = false; scheduleWarm(); } }
   }
@@ -1003,7 +1062,7 @@
   // reassigns (pages, ids, current, active, raf) are passed as
   // accessors, never copied. Without book-phone.js a phone gets the desktop turn.
   const core={
-    book,header,cache,reduced,narrow,narrowMqListen:fn=>narrowMq.addEventListener('change',fn),detailOpen,finish,syncOcean,updateHeader,texture,preparePageImages,navigate,pushPage,
+    book,header,cache,reduced,narrow,warmLow,narrowMqListen:fn=>narrowMq.addEventListener('change',fn),detailOpen,finish,syncOcean,updateHeader,texture,preparePageImages,navigate,pushPage,
     get pages(){return pages},get ids(){return ids},get current(){return current},get scrollPositions(){return scrollPositions},
     get active(){return active},set active(v){active=v},
     get raf(){return raf},set raf(v){raf=v},

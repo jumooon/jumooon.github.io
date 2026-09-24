@@ -33,8 +33,7 @@
     return {turns,duration:turns[count-1].start+turns[count-1].duration+165};
   }
   // The turn's eased progress for a pose t in [0,1]: a broader, quieter velocity
-  // curve than quintic-only (less mid-turn rush). Shared by the mesh and by the
-  // phone's curlTable(), which measures the same geometry.
+  // curve than quintic-only (less mid-turn rush).
   function poseProgress(t){return 0.35*t*t*t*(t*(t*6-15)+10)+0.65*(1-Math.cos(Math.PI*t))/2}
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   // Phones: the same 760px line the stylesheets use (see book-phone.js).
@@ -397,8 +396,19 @@
     const contentWidth = source.clientWidth;
     const scrollHeight=source.scrollHeight,sourceHeight=source.clientHeight,scrollbarWidth=source.offsetWidth-contentWidth;
     // Capture GPU pixels synchronously at the frozen clock; canvases themselves
-    // cannot be serialized into foreignObject snapshots.
-    const waterFrame=source.querySelector('.ocean-surface')?ocean.snapshot():null;
+    // cannot be serialized into foreignObject snapshots. The water is copied as
+    // pixels (a canvas-to-canvas copy) and later drawn beneath the rest of the
+    // page, which is rasterised with a see-through sky. Before, the frame was
+    // JPEG-encoded and embedded in the SVG as a data URL — the encode, the URL
+    // escaping and the larger SVG decode made Home the slowest page to capture.
+    const liveWater=source.querySelector('.ocean-surface')?ocean.frame():null;
+    let water=null;
+    if(liveWater){
+      const copy=document.createElement('canvas');copy.width=liveWater.width;copy.height=liveWater.height;
+      copy.getContext('2d').drawImage(liveWater,0,0);
+      const box=liveWater.getBoundingClientRect(),origin=book.getBoundingClientRect();
+      water={copy,x:box.left-origin.left,y:box.top-origin.top,w:box.width,h:box.height};
+    }
     const skyStyle=getComputedStyle(source);
     const pageBackground=skyStyle.background;
     const skyBase=skyStyle.getPropertyValue('--sky-base');
@@ -478,8 +488,12 @@
       if(embed){const box=clone.querySelector('.hero-music');if(box)box.remove()}
       const surface=clone.querySelector('.ocean-surface');
       if(surface){
-        if(waterFrame){const captured=document.createElement('img');captured.className=surface.className;captured.src=waterFrame;surface.replaceWith(captured)}
-        else {surface.remove();delete clone.querySelector('.ocean-scene').dataset.oceanReady}
+        surface.remove();
+        // With the water drawn underneath, the sky must let it through: the
+        // sheet's own background and the ocean scene's fallback picture stay
+        // out. Without live water the fallback picture is the sky, as before.
+        if(water)clone.style.background='transparent';
+        else delete clone.querySelector('.ocean-scene').dataset.oceanReady;
       }
       const wrapper = document.createElement('div');
       wrapper.setAttribute('xmlns','http://www.w3.org/1999/xhtml');
@@ -490,12 +504,12 @@
       // measured: the Work dashboard, live at y 642.461, was raster at 642, one
       // device pixel high, so the turning sheet sat slightly above the page it
       // replaced and dropped back when the turn handed over.
-      wrapper.style.cssText = 'position:relative;width:'+w+'px;height:'+h+'px;overflow:hidden;font:16px/1.6 Arial,sans-serif;color:#173344;background:#fbfdfd;-webkit-font-smoothing:antialiased;zoom:'+scale;
+      wrapper.style.cssText = 'position:relative;width:'+w+'px;height:'+h+'px;overflow:hidden;font:16px/1.6 Arial,sans-serif;color:#173344;background:'+(water?'transparent':'#fbfdfd')+';-webkit-font-smoothing:antialiased;zoom:'+scale;
       wrapper.style.setProperty('--book-header-height', headerHeight+'px');
       const style = document.createElement('style');
       style.textContent = css + '\n.paper-snapshot *,.site-header *{animation:none!important;transition:none!important}';
       const pageViewport=document.createElement('div');
-      Object.assign(pageViewport.style,{position:'absolute',top:sheetTop+'px',left:'0',width:contentWidth+'px',height:contentHeight+'px',overflow:'hidden',background:pageBackground});
+      Object.assign(pageViewport.style,{position:'absolute',top:sheetTop+'px',left:'0',width:contentWidth+'px',height:contentHeight+'px',overflow:'hidden',background:water?'transparent':pageBackground});
       pageViewport.append(clone);wrapper.append(style,pageViewport,headerClone);
       // Native scrollbars are outside the cloned content box. Reproduce the
       // same explicitly styled track/thumb so they do not pop in at settle.
@@ -516,7 +530,16 @@
       // Match device pixels instead of CSS pixels. NPOT textures avoid the
       // unequal horizontal/vertical resampling of power-of-two snapshots.
       canvas.width = cw; canvas.height = ch;
-      canvas.getContext('2d').drawImage(image,0,0);
+      const ctx=canvas.getContext('2d');
+      if(water){
+        // The sheet's colour, then the water where the live canvas sits (fitted
+        // as its object-fit: cover is), then the page on top.
+        ctx.fillStyle=pageBackground.match(/rgba?\([^)]*\)|#[0-9a-f]{3,8}/i)?.[0]||skyBase||'#000';ctx.fillRect(0,0,cw,ch);
+        const k=Math.max(water.w/water.copy.width,water.h/water.copy.height);
+        const sw=water.w/k,sh=water.h/k,sx=(water.copy.width-sw)/2,sy=(water.copy.height-sh)/2;
+        ctx.drawImage(water.copy,sx,sy,sw,sh,water.x*scale,water.y*scale,water.w*scale,water.h*scale);
+      }
+      ctx.drawImage(image,0,0);
       if(new URLSearchParams(location.search).has('book-debug')){
         document.querySelector('[data-book-snapshot="'+ids[index]+'"]')?.remove();
         const diagnostic=new Image();diagnostic.src=canvas.toDataURL();
@@ -542,7 +565,10 @@
     if (active || reduced.matches || !book.clientWidth) return;
     warming = true;
     try {
-    if (!renderer) {
+    // A phone curls with its own renderer (book-phone.js); warm snapshots are
+    // uploaded there instead, so a swipe never waits on a texture upload.
+    const sink = narrow() && phone && phone.cacheImage ? phone : null;
+    if (!sink && !renderer) {
       const front = await texture(current);
       if (active) return;
       renderer = createRenderer();
@@ -557,7 +583,7 @@
       try {
         const image = await texture(index);
         if (active) return;
-        renderer.cacheImage(image);
+        (sink || renderer).cacheImage(image);
         // Yield between snapshots/uploads so initial rendering stays responsive.
         await new Promise(resolve=>setTimeout(resolve,50));
       } catch { /* Retry on actual navigation. */ }
@@ -609,21 +635,12 @@
       precision mediump float;
 #endif
       uniform sampler2D frontImage; uniform sampler2D backImage;
-      uniform float direction; uniform float single; uniform vec3 paper;
+      uniform float direction;
       varying vec2 texcoord; varying float shade;
       void main(){
         bool front=(gl_FrontFacing == (direction>0.0));
-        vec4 color;
-        if(single>0.5){
-          // One page, bound at the left edge: the whole snapshot is the front;
-          // the back is the same sheet's paper with its print faintly showing
-          // through, mirrored as it would be.
-          vec4 c=texture2D(frontImage,vec2(texcoord.x,1.0-texcoord.y));
-          color=front ? c : vec4(mix(c.rgb,paper,0.9),1.0);
-        }else{
-          float u=front ? 0.5+direction*texcoord.x*0.5 : 0.5-direction*texcoord.x*0.5;
-          color=front ? texture2D(frontImage,vec2(u,1.0-texcoord.y)) : texture2D(backImage,vec2(u,1.0-texcoord.y));
-        }
+        float u=front ? 0.5+direction*texcoord.x*0.5 : 0.5-direction*texcoord.x*0.5;
+        vec4 color=front ? texture2D(frontImage,vec2(u,1.0-texcoord.y)) : texture2D(backImage,vec2(u,1.0-texcoord.y));
         float edge=smoothstep(0.996,1.0,texcoord.x)*0.065;
         gl_FragColor=vec4(color.rgb*(1.0-shade)+edge,color.a);
       }`));
@@ -681,8 +698,6 @@
     gl.uniform1i(gl.getUniformLocation(program,'frontImage'),0);
     gl.uniform1i(gl.getUniformLocation(program,'backImage'),1);
     const view=gl.getUniformLocation(program,'viewport'),perspective=gl.getUniformLocation(program,'perspective'),dir=gl.getUniformLocation(program,'direction');
-    const singleLoc=gl.getUniformLocation(program,'single'),paperLoc=gl.getUniformLocation(program,'paper');
-    let single=false;
     gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);
     canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();renderer=null;finish(true)});
     return {
@@ -700,11 +715,7 @@
         gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
       },
       // Compile/upload during idle preparation, before the first visible turn.
-      // options.single: a phone's one-page book — the spine is the left edge and
-      // the sheet is the full width; options.paper is its back's colour (0-1 rgb).
-      prepare(front,back,w,h,direction,options={}) {
-        single=Boolean(options.single);
-        gl.uniform1f(singleLoc,single?1:0);gl.uniform3fv(paperLoc,options.paper||[0.98,0.99,0.99]);
+      prepare(front,back,w,h,direction) {
         canvas.style.opacity='1';
         const dpr=rasterScale(w,h,devicePixelRatio);
         const cw=Math.round(w*dpr),ch=Math.round(h*dpr);
@@ -718,7 +729,7 @@
       },
       paint(t,w,h,direction,clear=true) {
         const progress=poseProgress(t), phase=Math.PI*progress;
-        const lift=t===1?0:Math.sin(phase),half=single?w:w/2,origin=single?0:w/2,step=half/cols;
+        const lift=t===1?0:Math.sin(phase),half=w/2,step=half/cols;
         const base=phase-lift*0.78*0.48;
         const baseSin=Math.sin(base),baseCos=Math.cos(base);
         // Landing. The sheet's lift toward the viewer (depth, which perspective
@@ -750,7 +761,7 @@
             const j=(row*(cols+1)+col)*6;
             // Exact terminal coordinates: no accumulated trig/perspective drift
             // at the frame where the raster hands ownership to the live page.
-            data[j]=t===1?origin-direction*u*half:origin+direction*x;
+            data[j]=t===1?half-direction*u*half:half+direction*x;
             data[j+1]=v*h+lift*u*u*(0.5-v)*6*land;
             data[j+2]=t===1?0:z*0.68*land;
             data[j+5]=t===1?0:0.10*Math.abs(sn)+0.025*lift*edgeShade[col];
@@ -986,14 +997,13 @@
   // Phones (≤760px) read the book one page at a time; that lives in
   // book-phone.js, which is handed this view of the engine. Everything else —
   // snapshots, the mesh, settle/finish, history — is shared. Values the engine
-  // reassigns (pages, ids, current, active, raf, renderer) are passed as
+  // reassigns (pages, ids, current, active, raf) are passed as
   // accessors, never copied. Without book-phone.js a phone gets the desktop turn.
   const core={
-    book,header,cache,reduced,narrow,detailOpen,finish,syncOcean,updateHeader,texture,preparePageImages,navigate,pushPage,poseProgress,
+    book,header,cache,reduced,narrow,detailOpen,finish,syncOcean,updateHeader,texture,preparePageImages,navigate,pushPage,
     get pages(){return pages},get ids(){return ids},get current(){return current},get scrollPositions(){return scrollPositions},
     get active(){return active},set active(v){active=v},
     get raf(){return raf},set raf(v){raf=v},
-    get renderer(){return renderer||(renderer=createRenderer())},
     get holdingHome(){return holdingHome},set holdingHome(v){holdingHome=v}
   };
   const phone=window.createBookPhone?window.createBookPhone(core):null;

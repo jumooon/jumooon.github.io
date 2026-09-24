@@ -1,21 +1,42 @@
-// The phone's finger mapping (book-phone.js curlTable) must mirror the mesh:
-// a flat page reaches the right edge, the pose where it has fully passed the
-// spine is found, and a finger moving left always turns the page further.
+// The phone curl's geometry (book-phone.js): the fold is a cylinder whose
+// vertex-shader twin is foldPoint(). A page at rest is flat, the held point
+// lands exactly under the finger, nothing ever tears or leaves the page plane
+// by more than the roll, and at goneAt() no part of the page is on screen.
 const {readFileSync}=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
 const assert=require('node:assert/strict');
-const book=readFileSync(path.join(__dirname,'../dist/book.js'),'utf8');
-const phone=readFileSync(path.join(__dirname,'../dist/book-phone.js'),'utf8');
-const context=vm.createContext({Math,Map});
-vm.runInContext(book.match(/function poseProgress\(t\)\{[^\n]*\}/)[0],context);
-vm.runInContext('const curlTables=new Map();'+phone.match(/function curlTable\(w,h\)\{[\s\S]*?\n  \}\n/)[0]+'this.curlTable=curlTable;',context);
+const src=readFileSync(path.join(__dirname,'../dist/book-phone.js'),'utf8');
+const geometry=src.slice(src.indexOf('  const PI=Math.PI'),src.indexOf('  function createCurlRenderer'));
+const ctx=vm.createContext({Math});
+vm.runInContext(geometry+';this.g={foldFor,foldPoint,crestOf,goneAt,norm}',ctx);
+const {foldFor,foldPoint,crestOf,goneAt,norm}=ctx.g;
+const close=(a,b,msg,eps=1e-6)=>assert.ok(Math.abs(a-b)<=eps,`${msg}: ${a} vs ${b}`);
 for(const [w,h] of [[390,844],[360,740],[430,932]]){
-  const table=context.curlTable(w,h);
-  assert.equal(table.tAt(w),0,'a flat page reaches the right edge');
-  assert.ok(table.tEnd>0.4&&table.tEnd<0.7,`the page leaves the screen part-way through the pose (tEnd ${table.tEnd})`);
-  assert.equal(table.tAt(0),table.tEnd);
-  let last=-1;
-  for(let r=w;r>=0;r-=w/40){const t=table.tAt(r);assert.ok(t>=last,`reach ${r}: pose must not go back (${t} < ${last})`);last=t}
+  const rMax=Math.max(26,Math.min(60,w*.13));
+  for(const n of [norm(1,0),norm(1,.18),norm(1,-.18),norm(1,.6)]){
+    const C={x:w,y:h*.8};
+    // At rest: every point stays where it is.
+    const flat=foldFor(C,n,0,rMax);
+    for(const [x,y] of [[0,0],[w,h],[w,C.y],[w/2,h/3]]){const p=foldPoint(x,y,flat);close(p.x,x,'flat x');close(p.y,y,'flat y');assert.equal(p.z,0)}
+    close(crestOf(C,n,0,rMax),w,'a flat page reaches the right edge');
+    // The held point is carried exactly to F = C - n·D.
+    for(const D of [5,40,120,300,700]){
+      const f=foldFor(C,n,D,rMax),p=foldPoint(C.x,C.y,f);
+      close(p.x,C.x-n.x*D,`held point x at D=${D}`,1e-6);close(p.y,C.y-n.y*D,`held point y at D=${D}`,1e-6);
+      assert.ok(f.R<=rMax+1e-9);
+      // Continuity across the fold (no tearing): neighbouring page points stay neighbours.
+      for(let y=0;y<=h;y+=h/8)for(let x=0;x<w;x+=w/60){
+        const a=foldPoint(x,y,f),b=foldPoint(x+w/60,y,f);
+        assert.ok(Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z)<=w/60+1e-6,'the page never stretches');
+        assert.ok(a.z>=0&&a.z<=2*f.R+1e-9);
+      }
+    }
+    // Gone: every page point is off the left of the screen.
+    const G=goneAt(C,n,rMax,h),g=foldFor(C,n,G,rMax);
+    for(let y=0;y<=h;y+=h/40)for(let x=0;x<=w;x+=w/40)assert.ok(foldPoint(x,y,g).x<=0,`point ${x},${y} still on screen at goneAt`);
+    // A finger moving on turns the page further: the crest only moves left.
+    let last=Infinity;for(let D=0;D<=G;D+=G/50){const c=crestOf(C,n,D,rMax);assert.ok(c<=last+1e-9);last=c}
+  }
 }
-console.log('PASS: phone curl mapping is monotonic and ends where the sheet leaves the screen');
+console.log('PASS: phone curl is flat at rest, carries the held point to the finger, never stretches, and leaves the screen at goneAt');

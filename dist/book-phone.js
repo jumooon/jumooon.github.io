@@ -1,23 +1,23 @@
 /* Phones (≤760px): the book one page at a time.
 
    The desktop shows the book as a two-page spread and turns its right half over
-   the spine in the middle (book.js). A phone is one page, so here the spine is
-   the screen's left edge and the whole page turns — the same curl, drawn by the
-   same renderer with its `single` option — and the page is held by the finger
-   rather than played as a set animation. What lives in this file:
+   the spine in the middle (book.js). A phone is one page, so it turns the way a
+   single sheet of paper does: the part under the finger is lifted and carried
+   with it, and the page rolls over a fold between the two. The page is held by
+   the finger rather than played as a set animation. What lives in this file:
 
-     beginCurl / curlTable / turnCurl   the finger-held curl and full turns
+     beginCurl / foldFor / curlTo       the page curl (its own WebGL renderer)
      beginSlide / slideTo               the live slide, if the curl is unavailable
-     hint                               Home's swipe hint and first-visit lift
+     hint                               Home's swipe hint and first-visit dog-ear
      touch handlers, holdHome           gestures below 760px
 
    book.js hands in `core`: its snapshot, settle/finish and history functions,
-   and accessors for the values it reassigns (pages, ids, current, active, raf,
-   renderer). book.js calls turn() for a menu tap / Back on a phone and sync()
-   after every settle. Load this file before book.js. */
+   and accessors for the values it reassigns (pages, ids, current, active, raf).
+   book.js calls turn() for a menu tap / Back on a phone, sync() after every
+   settle, and cacheImage() with idle snapshots. Load this file before book.js. */
 window.createBookPhone = function(core) {
   'use strict';
-  const {book,header,cache,reduced,narrow,detailOpen,finish,syncOcean,updateHeader,texture,preparePageImages,navigate,pushPage,poseProgress}=core;
+  const {book,header,cache,reduced,narrow,detailOpen,finish,syncOcean,updateHeader,texture,preparePageImages,navigate,pushPage}=core;
   let hint=null;
 
   // Phones: one sheet, slid rather than curled. Below 760px the screen is a
@@ -71,7 +71,7 @@ window.createBookPhone = function(core) {
         book.classList.remove('is-sliding');
       },
       // The drag interface shared with the curl (see the touch handlers).
-      update(x,dx){state.paint(Math.max(0,Math.min(1,(forward?-dx:dx)/w)))},
+      update(x,y,dx){state.paint(Math.max(0,Math.min(1,(forward?-dx:dx)/w)))},
       progress(){return state.p},
       release(commit){settleDrag(state,commit)}};
     return state;
@@ -108,97 +108,240 @@ window.createBookPhone = function(core) {
     animateSlide(state,commit?1:0,Math.max(160,Math.min(420,left*SLIDE_MS)),easeOut,()=>endSlide(state,commit));
   }
 
-  // Phones: the desktop curl, one page wide, held by the finger. The screen is a
-  // single page bound at its left edge, so the sheet is the whole width and turns
-  // about x = 0 (renderer option single). Forward, the current page is the sheet:
-  // it lifts from the right edge and curls away to the left, uncovering the live
-  // next page. Back, the previous page is the sheet: it curls in from the left
-  // over the live current page and lands flat, where the live page takes over.
-  // Either way only one snapshot is needed — the current page going forward,
-  // the previous one going back — and warm() keeps both ready while idle.
+  // ---- The page curl --------------------------------------------------------
   //
-  // Only the first part of the pose is ever seen: once the whole sheet has
-  // passed the spine it is off screen. curlTable() measures, for each pose, how
-  // far right the sheet still reaches on screen (the same geometry the mesh
-  // uses), which gives the pose where it vanishes (tEnd) and lets the finger
-  // hold the sheet's free edge: going forward the edge stays under the finger at
-  // the offset it was picked up with; going back it follows the finger's travel,
-  // scaled so the page lands flat as the finger reaches the right side.
-  // Should a snapshot or WebGL fail, the gesture carries on as the slide.
-  const CURL_MS=1100;
-  let curlBroken=false;
-  const curlTables=new Map();
-  function curlTable(w,h){
-    const key=w+'x'+h;if(curlTables.has(key))return curlTables.get(key);
-    // Mirrors renderer.paint() in single mode for the top, middle and bottom rows.
-    const cols=64,step=w/cols,persp=Math.max(3000,w*2.2),N=200,ts=[],reach=[];
-    for(let i=0;i<=N;i++){
-      const t=i/N,phase=Math.PI*poseProgress(t),lift=t===1?0:Math.sin(phase),base=phase-lift*0.78*0.48;
-      const fold=Math.min(1,Math.max(0,(t-0.5)/0.5)),land=1-fold*fold*(3-2*fold);
-      let most=0;
-      for(const v of [0,0.5,1]){
-        const inc=lift*(0.78+0.10*(v-0.5))/cols;let x=0,z=0,a=base+inc/2;
-        for(let col=1;col<=cols;col++){
-          x+=step*Math.cos(a);z+=step*Math.sin(a);a+=inc;
-          most=Math.max(most,w/2+(x-w/2)/(1-z*0.68*land/persp));
-        }
-      }
-      ts.push(t);reach.push(Math.min(w,most));
-    }
-    let endIndex=reach.findIndex(r=>r<=0.5);if(endIndex<0)endIndex=N;
-    const table={tEnd:ts[endIndex],
-      // The pose whose sheet reaches exactly r px across the screen.
-      tAt(r){
-        if(r>=w)return 0;if(r<=0)return ts[endIndex];
-        for(let i=1;i<=endIndex;i++)if(reach[i]<=r){const k=(reach[i-1]-r)/Math.max(1e-6,reach[i-1]-reach[i]);return ts[i-1]+(ts[i]-ts[i-1])*k}
-        return ts[endIndex];
-      }};
-    curlTables.set(key,table);return table;
+  // A phone page turns the way paper does: the part under the finger is lifted
+  // and carried to the finger, and the page rolls over a fold between the two.
+  // The fold is a cylinder of radius R lying across the page, perpendicular to
+  // the drag; everything past its axis wraps round it and, beyond half a turn,
+  // lies back over the page face down, showing the paper's back. Drag straight
+  // left and the fold runs straight down the page; start low (or high) and the
+  // bottom (or top) corner leads, so the fold runs slightly on the diagonal.
+  //
+  // Forward, the current page is the sheet and the next page is live beneath.
+  // Back, the previous page is the sheet: it unrolls in from the left over the
+  // live current page, the roll staying under the finger, and lands flat where
+  // the live page takes over. One snapshot per turn, uploaded while idle by
+  // warm() (cacheImage below), so a swipe starts without waiting for pixels.
+  //
+  // The geometry runs on the GPU: a fixed mesh, and per frame only four numbers
+  // (fold point, direction, radius). foldPoint() is its JavaScript twin, used by
+  // the tests; goneAt() finds how far the fold must travel for the page to have
+  // left the screen entirely.
+  const PI=Math.PI,CURL_MS=950,TILT=.18;
+  let curlBroken=false,curlRenderer=null;
+  const norm=(x,y)=>{const l=Math.hypot(x,y)||1;return {x:x/l,y:y/l}};
+  // The fold for grab point C carried a distance D along -n (so C lands on
+  // F = C - n·D): axis point P and radius R. R shrinks with D so a page at rest
+  // is flat and the first lift is a tight curl, as paper's is.
+  function foldFor(C,n,D,rMax){
+    const R=Math.min(rMax,Math.max(0,D)/PI),dc=(Math.max(0,D)+PI*R)/2;
+    return {R,P:{x:C.x-n.x*dc,y:C.y-n.y*dc},n};
   }
+  function foldPoint(x,y,f){
+    const d=(x-f.P.x)*f.n.x+(y-f.P.y)*f.n.y;
+    if(d<=0||f.R<=0)return {x,y,z:0};
+    const bx=x-f.n.x*d,by=y-f.n.y*d,th=d/f.R;
+    if(th<PI)return {x:bx+f.n.x*f.R*Math.sin(th),y:by+f.n.y*f.R*Math.sin(th),z:f.R*(1-Math.cos(th))};
+    return {x:bx-f.n.x*(d-PI*f.R),y:by-f.n.y*(d-PI*f.R),z:2*f.R};
+  }
+  // Where the fold's crest (the roll's leading edge) crosses the height of C.
+  function crestOf(C,n,D,rMax){const f=foldFor(C,n,D,rMax);return C.x-((Math.max(0,D)+PI*f.R)/2)/n.x+f.R*n.x}
+  function goneAt(C,n,rMax,h){
+    // The axis crosses height y at x = C.x - dc/n.x - (y - C.y)·n.y/n.x; the page is
+    // gone once that, plus the roll, is left of the screen over its full height
+    // (with room for the tilt, which carries rolled points up or down the page).
+    const lean=Math.abs(n.y/n.x),reach=Math.max(C.y,h-C.y)*lean+h*lean*.5;
+    const dc=(C.x+reach+rMax*n.x+2)*n.x;
+    return 2*dc-PI*rMax;
+  }
+  function createCurlRenderer(){
+    const canvas=document.createElement('canvas');canvas.className='paper-mesh';
+    const attributes={alpha:true,antialias:true,premultipliedAlpha:true,powerPreference:'high-performance'};
+    const gl=canvas.getContext('webgl2',attributes)||canvas.getContext('webgl',attributes);
+    if(!gl)throw new Error('WebGL unavailable');
+    const aniso=gl.getExtension('EXT_texture_filter_anisotropic')||gl.getExtension('WEBKIT_EXT_texture_filter_anisotropic');
+    canvas.addEventListener('webglcontextlost',e=>{
+      e.preventDefault();curlBroken=true;curlRenderer=null;
+      if(core.active?.curl){core.active.target=core.active.destination=core.active.from;finish(true)}
+    });
+    const precision='#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\n';
+    function program(vs,fs){
+      const p=gl.createProgram();
+      for(const [type,src] of [[gl.VERTEX_SHADER,vs],[gl.FRAGMENT_SHADER,precision+fs]]){
+        const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);
+        if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));
+        gl.attachShader(p,s);
+      }
+      gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(p));
+      return p;
+    }
+    // The sheet. Mirrors foldPoint(). Perspective is gentle (the roll is at most
+    // 2R off the page), and the flat page sits at z = 0 exactly, so a page at
+    // rest is drawn pixel for pixel where the live page is.
+    const sheet=program(`
+      attribute vec2 uv;
+      uniform vec2 size; uniform vec2 axisPoint; uniform vec2 axisNormal; uniform float radius; uniform float persp;
+      varying vec2 vUv; varying float vTheta;
+      void main(){
+        const float PI=3.14159265;
+        vec2 p=uv*size; float d=dot(p-axisPoint,axisNormal);
+        vec3 pos=vec3(p,0.0); float th=0.0;
+        if(d>0.0&&radius>0.0){
+          th=d/radius; vec2 b=p-axisNormal*d;
+          if(th<PI) pos=vec3(b+axisNormal*(radius*sin(th)),radius*(1.0-cos(th)));
+          else pos=vec3(b-axisNormal*(d-PI*radius),2.0*radius);
+        }
+        vUv=uv; vTheta=th;
+        float depth=1.0-pos.z/persp;
+        gl_Position=vec4((pos.x/size.x-0.5)*2.0,(0.5-pos.y/size.y)*2.0,-pos.z/persp*depth,depth);
+      }`,`
+      uniform sampler2D page; uniform vec3 paper;
+      varying vec2 vUv; varying float vTheta;
+      void main(){
+        const float PI=3.14159265;
+        vec4 c=texture2D(page,vec2(vUv.x,1.0-vUv.y));
+        if(gl_FrontFacing){
+          // The printed side darkens as it turns from the light, with a thin
+          // bright line where it starts to bend.
+          float turn=sin(min(vTheta,PI*0.5));
+          float light=1.0-0.30*turn+0.06*smoothstep(0.0,0.35,vTheta)*(1.0-smoothstep(0.35,0.9,vTheta));
+          gl_FragColor=vec4(c.rgb*light,1.0);
+        }else{
+          // The back: paper, with the print showing faintly through (mirrored,
+          // as it would be); darker on the roll's underside, full on its top.
+          vec3 back=mix(c.rgb,paper,0.9);
+          float light=vTheta<PI?0.70+0.30*sin(vTheta-PI*0.5):0.97;
+          gl_FragColor=vec4(back*light,1.0);
+        }
+      }`);
+    // The shadow the roll throws on the page beneath, just past its crest.
+    const shade=program(`
+      attribute vec2 corner; void main(){gl_Position=vec4(corner,0.0,1.0);}`,`
+      uniform vec2 size; uniform float scale; uniform vec2 axisPoint; uniform vec2 axisNormal; uniform float radius; uniform float strength;
+      void main(){
+        vec2 p=vec2(gl_FragCoord.x/scale,size.y-gl_FragCoord.y/scale);
+        float e=dot(p-axisPoint,axisNormal)-radius;
+        float a=strength*(1.0-smoothstep(0.0,56.0,e))*step(0.0,e);
+        gl_FragColor=vec4(0.0,0.0,0.0,a);
+      }`);
+    const COLS=48,ROWS=96,uv=new Float32Array((COLS+1)*(ROWS+1)*2),index=new Uint16Array(COLS*ROWS*6);
+    for(let r=0,k=0;r<=ROWS;r++)for(let c=0;c<=COLS;c++){uv[k++]=c/COLS;uv[k++]=r/ROWS}
+    for(let r=0,k=0;r<ROWS;r++)for(let c=0;c<COLS;c++){const a=r*(COLS+1)+c,b=a+COLS+1;index.set([a,b,a+1,a+1,b,b+1],k);k+=6}
+    const uvBuffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,uvBuffer);gl.bufferData(gl.ARRAY_BUFFER,uv,gl.STATIC_DRAW);
+    const indexBuffer=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,indexBuffer);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,index,gl.STATIC_DRAW);
+    const quad=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,quad);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+    const loc=(p,names)=>Object.fromEntries(names.map(n=>[n,gl.getUniformLocation(p,n)]));
+    const U=loc(sheet,['size','axisPoint','axisNormal','radius','persp','page','paper']);
+    const S=loc(shade,['size','scale','axisPoint','axisNormal','radius','strength']);
+    const uvLoc=gl.getAttribLocation(sheet,'uv'),cornerLoc=gl.getAttribLocation(shade,'corner');
+    // Uploaded snapshots, newest last. The one in use is never evicted.
+    const textures=new Map();let bound=null,scale=1,W=0,H=0;
+    function cacheImage(image){
+      if(textures.has(image)){const t=textures.get(image);textures.delete(image);textures.set(image,t);return t}
+      const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+      gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,image);
+      // No mipmaps: the curled page is never drawn much smaller than it is (it
+      // rolls, it does not recede), and skipping them halves the upload.
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+      if(aniso)gl.texParameterf(gl.TEXTURE_2D,aniso.TEXTURE_MAX_ANISOTROPY_EXT,Math.min(8,gl.getParameter(aniso.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));
+      textures.set(image,t);
+      while(textures.size>4){const [old,tex]=[...textures].find(([img])=>img!==bound)||[];if(!old)break;gl.deleteTexture(tex);textures.delete(old)}
+      return t;
+    }
+    return {
+      canvas,cacheImage,
+      // Bind a page, size the canvas to the book, and set the paper colour.
+      prepare(image,w,h,paper){
+        bound=image;W=w;H=h;scale=Math.min(devicePixelRatio||1,2);
+        const cw=Math.round(w*scale),ch=Math.round(h*scale);
+        if(canvas.width!==cw)canvas.width=cw;if(canvas.height!==ch)canvas.height=ch;
+        gl.viewport(0,0,cw,ch);
+        gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,cacheImage(image));
+        gl.useProgram(sheet);gl.uniform2f(U.size,w,h);gl.uniform1f(U.persp,Math.max(2400,w*6));gl.uniform1i(U.page,0);gl.uniform3fv(U.paper,paper);
+        gl.useProgram(shade);gl.uniform2f(S.size,w,h);gl.uniform1f(S.scale,scale);
+      },
+      draw(f,D){
+        gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+        const R=f.R;
+        if(R>0){
+          gl.useProgram(shade);gl.disable(gl.DEPTH_TEST);gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
+          gl.uniform2f(S.axisPoint,f.P.x,f.P.y);gl.uniform2f(S.axisNormal,f.n.x,f.n.y);gl.uniform1f(S.radius,R);
+          gl.uniform1f(S.strength,.24*Math.min(1,D/60));
+          gl.bindBuffer(gl.ARRAY_BUFFER,quad);gl.enableVertexAttribArray(cornerLoc);gl.vertexAttribPointer(cornerLoc,2,gl.FLOAT,false,0,0);
+          gl.drawArrays(gl.TRIANGLE_STRIP,0,4);gl.disableVertexAttribArray(cornerLoc);
+        }
+        gl.useProgram(sheet);gl.disable(gl.BLEND);gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);
+        gl.uniform2f(U.axisPoint,f.P.x,f.P.y);gl.uniform2f(U.axisNormal,f.n.x,f.n.y);gl.uniform1f(U.radius,R);
+        gl.bindBuffer(gl.ARRAY_BUFFER,uvBuffer);gl.enableVertexAttribArray(uvLoc);gl.vertexAttribPointer(uvLoc,2,gl.FLOAT,false,0,0);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,indexBuffer);
+        gl.drawElements(gl.TRIANGLES,index.length,gl.UNSIGNED_SHORT,0);
+        gl.disableVertexAttribArray(uvLoc);
+      }
+    };
+  }
+  function renderer(){return curlRenderer||(curlRenderer=createCurlRenderer())}
   function paperOf(el){
     const m=getComputedStyle(el).backgroundColor.match(/[\d.]+/g);
     return m&&m.length>=3?m.slice(0,3).map(n=>Number(n)/255):[0.98,0.99,0.99];
   }
-  function beginCurl(target,touchRef){
-    const from=core.current,forward=target>from,sheet=forward?from:target;
-    const w=book.clientWidth,h=book.clientHeight,table=curlTable(w,h);
-    const x0=touchRef?touchRef.x:w,gain=Math.min(2.5,w/Math.max(1,w-x0));
-    const state={curl:true,from,target,destination:target,forward,w,h,table,
-      reach:forward?w:0,t:forward?0:table.tEnd,ready:false,
-      progress(){return forward?1-state.reach/w:state.reach/w},
-      update(x,dx){
-        const e=forward?x+(w-x0):(x-x0)*gain;                  // the free edge's x
-        state.reach=Math.max(0,Math.min(w,e));state.t=table.tAt(state.reach);
-        requestCurlPaint(state);
+  // opts: {x, y} where the finger went down (a drag), or {C, n} for a set turn.
+  function beginCurl(target,opts={}){
+    const from=core.current,forward=target>from,sheetIndex=forward?from:target;
+    const w=book.clientWidth,h=book.clientHeight,rMax=Math.max(26,Math.min(60,w*.13));
+    const y0=opts.y??h*.78,lean=y0>h/2?1:-1;
+    const C=opts.C||{x:w,y:Math.max(0,Math.min(h,y0))};
+    const state={curl:true,from,target,destination:target,forward,w,h,C,rMax,ready:false,
+      n:opts.n||norm(1,lean*TILT),D:0,
+      fold(){return foldFor(C,state.n,state.D,rMax)},
+      gone(){return goneAt(C,state.n,rMax,h)},
+      progress(){const c=crestOf(C,state.n,state.D,rMax)/w;return Math.max(0,Math.min(1,forward?1-c:c))},
+      update(x,y,dx,dy){
+        if(forward){
+          // The grabbed point follows the finger; the corner on the finger's side leads.
+          const vx=Math.max(0,-dx),vy=Math.max(-.6*vx,Math.min(.6*vx,-dy+lean*Math.min(vx,w)*TILT));
+          if(vx>0.5)state.n=norm(vx,vy);
+          state.D=Math.hypot(vx,vy);
+        }else{
+          // The roll stays under the finger: it enters at the left edge and the
+          // page lies flat as the finger reaches the right side.
+          const gain=Math.min(2.5,w/Math.max(1,w-opts.x));
+          const crest=Math.max(0,Math.min(w,(x-opts.x)*gain)),n=state.n;
+          let D=2*((C.x+rMax*n.x-crest)*n.x)-PI*rMax;
+          if(D<PI*rMax)D=Math.max(0,(C.x-crest)/(1/n.x-n.x/PI));
+          state.D=Math.min(state.gone(),D);
+        }
+        requestPaint(state);
       },
       release(commit){
         if(!state.ready){state.pendingRelease=commit;return}
-        const to=forward===commit?0:w;
-        animateCurl(state,to,Math.max(200,Math.min(650,Math.abs(to-state.reach)/w*900)),easeOut,()=>endCurl(state,commit));
+        const to=forward===commit?state.gone():0;
+        animateD(state,to,Math.max(200,Math.min(650,Math.abs(to-state.D)/state.gone()*900)),easeOut,()=>endCurl(state,commit));
       }};
+    state.D=forward?0:state.gone();
+    // Going forward the next page is live beneath: show it now, under the
+    // current page, so its first layout is done before the sheet lifts.
+    const incoming=core.pages[target],outgoing=core.pages[from];
+    if(forward){incoming.hidden=false;incoming.scrollTop=core.scrollPositions[target];incoming.style.zIndex='1';outgoing.style.zIndex='2'}
+    incoming.inert=true;outgoing.inert=true;
     // A live Home is drawn with moving water, so its snapshot is taken afresh, as
     // on the desktop — for a finger, already at touchstart (see holdHome).
-    if(!touchRef&&sheet===core.current&&core.ids[sheet]==='hero')cache.delete(sheet);
+    if(!opts.touch&&sheetIndex===core.current&&core.ids[sheetIndex]==='hero'&&!heldRecently())cache.delete(sheetIndex);
     (async()=>{
-      await preparePageImages(sheet);
+      await preparePageImages(sheetIndex);
       if(core.active!==state)return;
-      const image=await texture(sheet);
+      const image=await texture(sheetIndex);
       if(core.active!==state)return;
-      core.renderer.pinImages([image]);
-      core.renderer.prepare(image,image,w,h,1,{single:true,paper:paperOf(core.pages[sheet])});
+      const r=renderer();
+      r.prepare(image,w,h,paperOf(core.pages[sheetIndex]));
+      r.draw(state.fold(),state.D);
       const overlay=document.createElement('div');overlay.className='paper-turn';
       overlay.inert=true;overlay.setAttribute('aria-hidden','true');
-      overlay.append(core.renderer.canvas);document.body.append(overlay);state.overlay=overlay;
-      core.renderer.paint(state.t,w,h,1);
-      // Beneath the sheet lies the later page. Going forward that is the
-      // destination, shown now; going back it is the page being left, already live.
-      const incoming=core.pages[target],outgoing=core.pages[from];
-      if(forward){
-        incoming.hidden=false;incoming.scrollTop=core.scrollPositions[target];
-        incoming.style.zIndex='1';outgoing.style.zIndex='2';outgoing.style.visibility='hidden';
-        updateHeader(target);
-      }
-      incoming.inert=true;outgoing.inert=true;
+      overlay.append(r.canvas);document.body.append(overlay);state.overlay=overlay;state.r=r;
+      if(forward){outgoing.style.visibility='hidden';updateHeader(target)}
       book.classList.add('is-page-turning');
       state.ready=true;
       if(state.onReady)state.onReady();
@@ -207,49 +350,30 @@ window.createBookPhone = function(core) {
       if(core.active!==state)return;
       console.warn('Page curl unavailable; using the slide.',error);
       curlBroken=true;
-      const pending=state.pendingRelease;
+      const pending=state.pendingRelease,touchRef=opts.touch;
       state.target=state.destination=state.from;finish(true);
       if(state.peek){hint.peekSlide();return}
-      if(state.onReady)slideTo(target);                         // a programmatic turn
+      if(state.onReady)slideTo(target);                         // a set turn
       else if(touchRef&&!touchRef.ended){                       // the finger is still down
-        const s=beginSlide(target);core.active=s;touchRef.state=s;s.update(touchRef.lastX,touchRef.lastDx||0);
+        const s=beginSlide(target);core.active=s;touchRef.state=s;s.update(touchRef.lastX,touchRef.lastY,touchRef.lastDx||0,0);
       }else if(pending)slideTo(target);
     });
     return state;
   }
-  function requestCurlPaint(state){
+  function requestPaint(state){
     if(!state.ready||state.painting)return;
     state.painting=true;
-    core.raf=requestAnimationFrame(()=>{state.painting=false;if(core.active===state)core.renderer.paint(state.t,state.w,state.h,1)});
+    core.raf=requestAnimationFrame(()=>{state.painting=false;if(core.active===state)state.r.draw(state.fold(),state.D)});
   }
-  // Moves the sheet's free edge to `to` px (0 = gone past the spine, w = flat).
-  function animateCurl(state,to,ms,ease,done){
-    const from=state.reach;let start;
+  function animateD(state,to,ms,ease,done){
+    const from=state.D;let start;
     cancelAnimationFrame(core.raf);state.painting=false;
     function step(ts){
       if(core.active!==state)return;
       if(start===undefined)start=ts;
       const k=ms>0?Math.min(1,(ts-start)/ms):1;
-      state.reach=from+(to-from)*ease(k);state.t=state.table.tAt(state.reach);
-      core.renderer.paint(state.t,state.w,state.h,1);
-      if(k<1)core.raf=requestAnimationFrame(step);else done();
-    }
-    core.raf=requestAnimationFrame(step);
-  }
-  // A whole turn from the menu, Back/Forward or the hint: the pose runs at an
-  // even rate, as on the desktop, so the mesh's own easing shapes the motion —
-  // the sheet gathers speed as it lifts away, or loses it as it lands. Two
-  // frames are held first so the page beneath is laid out before anything moves.
-  function turnCurl(state,done){
-    const t0=state.t,t1=state.forward?state.table.tEnd:0;let start,hold=2;
-    cancelAnimationFrame(core.raf);
-    function step(ts){
-      if(core.active!==state)return;
-      if(hold>0){hold--;core.renderer.paint(state.t,state.w,state.h,1);core.raf=requestAnimationFrame(step);return}
-      if(start===undefined)start=ts;
-      const k=Math.min(1,(ts-start)/CURL_MS);
-      state.t=t0+(t1-t0)*k;
-      core.renderer.paint(state.t,state.w,state.h,1);
+      state.D=from+(to-from)*ease(k);
+      state.r.draw(state.fold(),state.D);
       if(k<1)core.raf=requestAnimationFrame(step);else done();
     }
     core.raf=requestAnimationFrame(step);
@@ -260,11 +384,14 @@ window.createBookPhone = function(core) {
     else state.target=state.destination=state.from;
     finish();
   }
+  // A whole turn from the menu, Back/Forward or the hint's tap: the bottom
+  // corner leads, as a right hand turning a page would.
   function curlTo(target){
-    const state=beginCurl(target);core.active=state;syncOcean();
+    const h=book.clientHeight,w=book.clientWidth;
+    const state=beginCurl(target,{C:{x:w,y:h*.8},n:norm(1,TILT)});core.active=state;syncOcean();
     book.setAttribute('aria-busy','true');
     hint?.away();
-    state.onReady=()=>turnCurl(state,()=>endCurl(state,true));
+    state.onReady=()=>animateD(state,state.forward?state.gone():0,CURL_MS,easeInOut,()=>endCurl(state,true));
   }
 
   // Phones, Home only: the desktop's right-hand chevron, drawn in the sky's ink
@@ -291,10 +418,11 @@ window.createBookPhone = function(core) {
       peeked=true;try{localStorage.setItem(KEY,'1')}catch{}
       b.classList.add('is-lit');
       if(curlBroken){peekSlide();return}
-      // Home's free edge lifts a finger's width and settles back.
-      const s=beginCurl(core.current+1);s.peek=true;core.active=s;syncOcean();
-      s.onReady=()=>animateCurl(s,s.w-34,560,easeOut,()=>setTimeout(()=>{
-        if(core.active===s)animateCurl(s,s.w,620,easeInOut,()=>endCurl(s,false));
+      // Home's bottom corner lifts like a dog-ear and settles back.
+      const w=book.clientWidth,h=book.clientHeight;
+      const s=beginCurl(core.current+1,{C:{x:w,y:h*.92},n:norm(1,.6)});s.peek=true;core.active=s;syncOcean();
+      s.onReady=()=>animateD(s,Math.min(64,w*.16),560,easeOut,()=>setTimeout(()=>{
+        if(core.active===s)animateD(s,0,620,easeInOut,()=>endCurl(s,false));
       },380));
     }
     // Without the curl: Work's edge slides in a finger's width and back.
@@ -342,12 +470,27 @@ window.createBookPhone = function(core) {
   // the swipe is recognised would hold the page still under the finger while it
   // is drawn, so a touch on Home stops the water and starts the snapshot at
   // once; the water runs on again when the finger lifts without turning.
+  // The same for a finger on the menu or the hint: the tap turns the page
+  // a moment later, and the snapshot is ready by then. The water waits a
+  // little after the finger lifts, so the tap's turn starts on this very frame.
+  let heldAt=-1e9,releaseTimer=0;
   function holdHome(on){
     if(on){
       if(!narrow()||core.active||detailOpen()||curlBroken||reduced.matches||core.ids[core.current]!=='hero')return;
-      core.holdingHome=true;syncOcean();cache.delete(core.current);texture(core.current).catch(()=>{});
-    }else if(core.holdingHome){core.holdingHome=false;syncOcean()}
+      clearTimeout(releaseTimer);
+      if(core.holdingHome&&performance.now()-heldAt<1000)return;
+      // The snapshot goes to the GPU straight away, while the finger is still
+      // deciding, so the curl has nothing left to wait for.
+      core.holdingHome=true;heldAt=performance.now();syncOcean();cache.delete(core.current);
+      texture(core.current).then(cacheImage).catch(()=>{});
+    }else if(core.holdingHome){
+      clearTimeout(releaseTimer);
+      releaseTimer=setTimeout(()=>{if(core.holdingHome&&!touch){core.holdingHome=false;syncOcean()}},400);
+    }
   }
+  const heldRecently=()=>core.holdingHome&&performance.now()-heldAt<1500;
+  document.addEventListener('touchstart',e=>{if(e.target.closest?.('.site-header a, .swipe-hint'))holdHome(true)},{passive:true});
+  document.addEventListener('touchend',e=>{if(e.target.closest?.('.site-header a, .swipe-hint'))holdHome(false)},{passive:true});
   book.addEventListener('touchmove',e=>{
     if(!touch||!narrow()||detailOpen())return;
     if(e.touches.length!==1){cancelTouch();return}
@@ -358,16 +501,16 @@ window.createBookPhone = function(core) {
       touch.lock=true;
       const target=core.current+(dx<0?1:-1);
       if(target<0||target>=core.ids.length)touch.edge=true;
-      else{touch.state=curlBroken||reduced.matches?beginSlide(target):beginCurl(target,touch);core.active=touch.state;syncOcean();hint?.away()}
+      else{touch.state=curlBroken||reduced.matches?beginSlide(target):beginCurl(target,{x:touch.x,y:touch.y,touch});core.active=touch.state;syncOcean();hint?.away()}
     }
     if(e.cancelable)e.preventDefault();
     const now=performance.now();
     touch.trail.push({x:t.clientX,at:now});
     while(touch.trail.length>2&&now-touch.trail[0].at>100)touch.trail.shift();
-    touch.lastX=t.clientX;touch.lastDx=dx;
+    touch.lastX=t.clientX;touch.lastY=t.clientY;touch.lastDx=dx;
     if(touch.edge){stretch(dx);return}
     const s=touch.state;if(core.active!==s){touch=null;return}
-    s.update(t.clientX,dx);
+    s.update(t.clientX,t.clientY,dx,dy);
   },{passive:false});
   book.addEventListener('touchend',()=>{
     const tt=touch;touch=null;holdHome(false);if(!tt||detailOpen())return;
@@ -400,5 +543,12 @@ window.createBookPhone = function(core) {
   }
 
   function turn(target){if(curlBroken)slideTo(target);else curlTo(target)}
-  return {turn,sync(){if(hint)hint.sync()}};
+  // warm() hands idle snapshots here so the GPU already has them at a swipe.
+  function cacheImage(image){
+    if(curlBroken)return;
+    try{renderer().cacheImage(image)}catch(error){curlBroken=true;console.warn('Page curl unavailable; using the slide.',error)}
+  }
+  return {turn,cacheImage,sync(){if(hint)hint.sync()},
+    // For tests: the fold geometry, shared with the vertex shader.
+    geometry:{foldFor,foldPoint,crestOf,goneAt}};
 };

@@ -1,5 +1,38 @@
 # Portfolio page-turn handoff — 2026-09-16
 
+## 2026-09-24 — Phone curl v2 (paper roll) and a faster Home snapshot
+
+- The phone no longer uses the desktop mesh. book-phone.js has its own small
+  WebGL renderer: a fixed 48x96 mesh folded in the vertex shader around a
+  cylinder (radius R ≤ 13% of the width) whose axis lies across the page,
+  perpendicular to the drag. The point under the finger is carried exactly to
+  the finger (foldFor: dc = (D + πR)/2); past half a turn the page lies back
+  face down (paper colour with the print faintly through). Front darkens as it
+  turns, back is lit on top, and a soft shadow falls past the roll's crest.
+  Starting low (or high) tilts the fold so that corner leads (TILT .18).
+  Back: the previous page unrolls in from the left, crest under the finger.
+  Menu/Back: bottom corner leads, 950 ms ease-in-out. First-visit hint: a
+  dog-ear at the bottom corner. goneAt() gives the travel at which nothing is
+  left on screen. tests/book-phone-curl checks: flat at rest, held point lands
+  on the finger, no stretching, fully off screen at goneAt.
+- Per frame the CPU sends four numbers; no buffer uploads. warm() hands idle
+  snapshots to phone.cacheImage() (uploaded without mipmaps: the page rolls,
+  it never recedes), so a swipe starts with its texture already on the GPU.
+  Measured in headless Chromium: sheet on screen 11 ms after the swipe is
+  recognised on a cached page.
+- Home snapshot (shared with the desktop): ocean.frame() returns the live
+  water canvas; texture() copies it and draws it beneath a see-through SVG
+  raster instead of JPEG-encoding it into the SVG. Hero capture went from
+  ~180 ms to 5-20 ms in headless Chromium; desktop turn preparation from Home
+  1.5-2.6 s -> 41 ms there (software GL, so absolute numbers are pessimistic).
+  Snapshot vs live Home: same text-edge difference as before (0.77% of pixels,
+  pre-existing), lower mean error (no JPEG artefacts), water identical.
+- A touch on Home (page, menu link or hint) freezes the water and uploads a
+  fresh Home snapshot at once; the water resumes 400 ms after the finger lifts
+  if no turn started.
+- Desktop renderer is back to spread-only (the `single` option was removed).
+- Not verified on a physical phone.
+
 ## 2026-09-24 — Phone code split out (book-phone.js / book-phone.css)
 
 - Everything that only happens below 760px now lives in dist/book-phone.js

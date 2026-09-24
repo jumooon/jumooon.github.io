@@ -7,7 +7,7 @@
    (window.Astronomy) and stars.js (window.STARS) loaded first.
    Integrated with the book's freeze/capture lifecycle (setRunning / snapshot). */
 window.createOcean = function(scene) {
-  const inert = {setCity(){},setRunning(){},snapshot(){return null},describe(){return null},describeCity(){return null},get city(){return 'sandiego'},get skyKey(){return 'none'}};
+  const inert = {setCity(){},setRunning(){},snapshot(){return null},frame(){return null},describe(){return null},describeCity(){return null},get city(){return 'sandiego'},get skyKey(){return 'none'}};
   if(!scene||!window.Astronomy||!window.STARS)return inert;
   const A=window.Astronomy, STARS=window.STARS;
   const canvas=document.createElement('canvas');canvas.className='ocean-art ocean-surface';canvas.setAttribute('aria-hidden','true');
@@ -373,6 +373,11 @@ window.createOcean = function(scene) {
       // which blocked the turn. Quality .92 is ~212KB and ~33ms, and the context is
       // opaque (alpha:false) so nothing needs transparency.
       snapshot(){if(!loaded||lost)return null;draw();scene.dataset.oceanReady='true';return canvas.toDataURL('image/jpeg',.92)},
+      // The live canvas itself, drawn at the current (frozen) clock. The page
+      // snapshot copies it straight onto its raster (book.js texture), which
+      // skips the JPEG encode above and the decode of a large data URL inside
+      // the SVG. preserveDrawingBuffer keeps the pixels readable after draw().
+      frame(){if(!loaded||lost)return null;draw();scene.dataset.oceanReady='true';return canvas},
       describe(){return lastDescribe},
       // On-demand facts for either city (the hover detail): time, Sun, view, phase of day.
       describeCity(id){

@@ -115,7 +115,7 @@ window.createBookPhone = function(core) {
   // the same however the turn was started. foldPoint() is its JavaScript twin, used by
   // the tests; goneAt() finds how far the fold must travel for the page to have
   // left the screen entirely.
-  const PI=Math.PI,CURL_MS=950,TILT=.18;
+  const PI=Math.PI,CURL_MS=1100,TILT=.18;
   let curlBroken=false,curlRenderer=null;
   const norm=(x,y)=>{const l=Math.hypot(x,y)||1;return {x:x/l,y:y/l}};
   // The fold for grab point C carried a distance D along -n (so C lands on
@@ -374,18 +374,21 @@ window.createBookPhone = function(core) {
     else state.target=state.destination=state.from;
     finish();
   }
-  // A whole turn. One page: 950 ms. A jump: each sheet takes 760 ms and the
-  // next starts 230 ms after the one before, so the pages fan through.
-  const RIFFLE_MS=760,RIFFLE_GAP=230;
+  // A whole turn. One page: 1100 ms. A jump: each sheet takes 900 ms and the
+  // next starts 300 ms after the one before, so the pages fan through.
+  const RIFFLE_MS=900,RIFFLE_GAP=300;
   function curlTo(target){
     const state=beginCurl(target);core.active=state;syncOcean();
     book.setAttribute('aria-busy','true');
     state.onReady=()=>{
       const count=state.sheets.length,dur=count===1?CURL_MS:RIFFLE_MS,total=dur+(count-1)*RIFFLE_GAP;
-      let start;
+      // Two frames held at the first pose before anything moves: the pages'
+      // uploads and the live page's first layout land there, not mid-motion.
+      let start,hold=2;
       cancelAnimationFrame(core.raf);
       function step(ts){
         if(core.active!==state)return;
+        if(hold>0){hold--;state.draw();core.raf=requestAnimationFrame(step);return}
         if(start===undefined)start=ts;
         const t=ts-start;
         for(const s of state.sheets){
@@ -424,6 +427,24 @@ window.createBookPhone = function(core) {
   document.addEventListener('touchend',e=>{if(e.target.closest?.(TAPS))holdHome(false)},{passive:true});
   document.addEventListener('touchcancel',()=>holdHome(false),{passive:true});
 
+  // ---- Taps that always land -------------------------------------------------
+  // A finger on the guide or the menu button acts when it lifts, instead of
+  // waiting for the browser's click. iOS drops the click of a tap that stops a
+  // page still gliding from a scroll, and of a tap whose finger drifts a few
+  // pixels — both read as "the guide did not respond". A mouse or a keyboard
+  // still uses the click; the click that follows a finger's tap is ignored.
+  function onTap(el,act){
+    let down=null,skipClickUntil=0;
+    el.addEventListener('pointerdown',e=>{if(e.pointerType!=='mouse')down={id:e.pointerId,x:e.clientX,y:e.clientY}},{passive:true});
+    el.addEventListener('pointercancel',()=>{down=null},{passive:true});
+    el.addEventListener('pointerup',e=>{
+      const d=down;down=null;
+      if(!d||e.pointerId!==d.id||Math.hypot(e.clientX-d.x,e.clientY-d.y)>16)return;
+      skipClickUntil=performance.now()+700;act();
+    });
+    el.addEventListener('click',e=>{if(performance.now()<skipClickUntil){e.preventDefault();return}act()});
+  }
+
   // ---- Rooms: names and numbers ----------------------------------------------
   // The pages are numbered as their own headings number them (Work is 01,
   // Method 02 ...); Home is the entrance, 00.
@@ -459,7 +480,7 @@ window.createBookPhone = function(core) {
       return a;
     }));
   }
-  toggle.addEventListener('click',()=>setMenu(menu.hidden));
+  onTap(toggle,()=>setMenu(menu.hidden));
   menu.addEventListener('click',e=>{if(e.target.closest('a'))setMenu(false)},true);
   document.addEventListener('pointerdown',e=>{if(!menu.hidden&&!header.contains(e.target))setMenu(false)},true);
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!menu.hidden){setMenu(false);toggle.focus()}});
@@ -477,8 +498,10 @@ window.createBookPhone = function(core) {
   document.body.append(guide);
   const [prev,next]=guide.querySelectorAll('.room-step'),count=guide.querySelector('.room-count');
   function press(b){b.classList.remove('is-pressed');void b.offsetWidth;b.classList.add('is-pressed');setTimeout(()=>b.classList.remove('is-pressed'),420)}
-  prev.addEventListener('click',()=>{press(prev);navigate(core.current-1)});
-  next.addEventListener('click',()=>{press(next);navigate(core.current+1)});
+  // One tap, one page, counted from the page on show; a tap while a turn is
+  // already running asks for the page it is turning to, so it changes nothing.
+  onTap(prev,()=>{if(prev.hidden)return;press(prev);navigate(core.current-1)});
+  onTap(next,()=>{if(next.hidden)return;press(next);navigate(core.current+1)});
   // i: the page the guide should describe — the current one, or the one a
   // forward turn is uncovering (it is live beneath the sheet from the start).
   function syncGuide(i=core.current){

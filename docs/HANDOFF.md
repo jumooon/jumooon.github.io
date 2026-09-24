@@ -1,5 +1,34 @@
 # Portfolio page-turn handoff — 2026-09-16
 
+## 2026-09-25 — Phone feedback round (pacing, taps, guide, Contact, images)
+
+- Pacing: one page 1100 ms (was 950); a jump 900 ms per sheet, 300 ms apart
+  (was 760 / 230). Two frames are held at the first pose before motion.
+- Taps on the room guide that did not register: the guide's buttons (and the
+  menu button) act on the finger's pointerup (onTap in book-phone.js), not on
+  the browser's click — iOS drops the click of a tap that stops a gliding
+  scroll or drifts a few px. The following click is ignored for 700 ms; mouse
+  and keyboard still use click. The steps' tap area is unchanged. `html { touch-action: manipulation }` on phones (no double-tap zoom
+  holding back a quick second tap). One tap = one page from the page on show;
+  a quick double tap turns one page (verified). warm() yields on pointerdown
+  and keeps 1x copies of the pages two away.
+- Room guide: plain white on every page, no backdrop blur, no per-page colours.
+- Snapshot pictures: copies get the live computed width/height (they cannot
+  lay out smaller than the live page while their inlined file decodes); on
+  WebKit (every iPhone browser, Safari) a throwaway draw + 120 ms wait before
+  the real draw — WebKit bug 39059, embedded images blank on first draw. Home's
+  fallback picture under the water is no longer fetched/inlined. The WebKit
+  path could not be run here (Chromium only); needs a look on the iPhone.
+- Pictures: after the first warm pass a phone fetches every remaining picture
+  in the background, nearest pages first, low priority, two at a time
+  (12/12 loaded 12 s after opening Home, headless).
+- Contact (phone only): content from the top; the times' grid has an empty
+  column each side, so the numerals are centred; links and note below.
+- Desktop pages pixel-identical before/after (1440x900, all five pages).
+- Known, pre-existing: in Chromium the Collection snapshot differs from the live
+  page by a sub-pixel (1.19% of pixels at text/image edges, same before this
+  round).
+
 ## 2026-09-25 — WebP pictures, neighbour images, Contact on phones
 
 - WebP copies beside the originals (same name, .webp; for the widest Work

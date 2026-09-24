@@ -50,6 +50,8 @@
   const dropFrom = (store, key) => Map.prototype.delete.call(store, key);
   let current = 0, queued = null, active = null, raf = 0, revision = 0, warmTimer;
   let renderer, warming = false, rewarm = false, arrowsApi = null, holdingHome = false;
+  // Every browser on an iPhone, and Safari on a Mac (Chrome on iOS says CriOS).
+  const WEBKIT_SVG_RACE = /AppleWebKit/.test(navigator.userAgent) && !/(Chrome|Chromium|Edg)\//.test(navigator.userAgent);
   const BLANK_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
   const ocean=window.createOcean(document.querySelector('.ocean-scene'));
   // The two cities under the hero title. A click makes the hero show that city's
@@ -488,6 +490,11 @@
     });
     const originals = [...source.querySelectorAll('img')];
     const originalSizes = originals.map(img => [img.clientWidth || img.width, img.clientHeight || img.height]);
+    // Each picture's laid-out size, given to its copy: the copy then keeps that
+    // size whether or not its inlined file has decoded when the snapshot is
+    // drawn (Safari could lay a not-yet-decoded picture out smaller — the
+    // Collection works shrank for a moment at a turn).
+    const originalCss = originals.map(img => { const cs = getComputedStyle(img); return [cs.width, cs.height]; });
     // Only images inside the sheet's visible window are inlined. The rest become
     // a 1px placeholder held at their exact laid-out box, so everything below
     // them sits where it does on the live page. Inlining all of them made the
@@ -516,6 +523,7 @@
     const css = snapshotCss();
     // A copied <picture> would pick its <source> file over the inlined picture.
     clone.querySelectorAll('picture source').forEach(n=>n.remove());
+    let embedded = 0;
     const promise = (async () => {
       await Promise.all([...clone.querySelectorAll('img')].map(async (img,i)=>{
         // The copy's own src goes first: a copy of a lazy picture that is not
@@ -525,11 +533,16 @@
         img.removeAttribute('srcset'); img.removeAttribute('sizes');
         img.removeAttribute('loading');
         const box = originalBoxes[i];
-        if (box) {
-          Object.assign(img.style, { boxSizing: 'border-box', width: box[0] + 'px', height: box[1] + 'px' });
+        // Home's fallback picture sits under the water, which is drawn in
+        // separately: nothing of it would show, so it is not fetched or inlined.
+        if (box || (water && originals[i].closest('.ocean-scene'))) {
+          if (box) Object.assign(img.style, { boxSizing: 'border-box', width: box[0] + 'px', height: box[1] + 'px' });
           img.src = BLANK_IMAGE; return;
         }
+        const [cssW, cssH] = originalCss[i];
+        if (/px$/.test(cssW) && /px$/.test(cssH)) Object.assign(img.style, { width: cssW, height: cssH });
         img.src = await embeddedImage(originals[i], originalSizes[i][0], originalSizes[i][1], scale);
+        embedded++;
       }));
       const embed=clone.querySelector('#spotify-embed, .hero-music');
       if(embed){const box=clone.querySelector('.hero-music');if(box)box.remove()}
@@ -586,6 +599,15 @@
         const sw=water.w/k,sh=water.h/k,sx=(water.copy.width-sw)/2,sy=(water.copy.height-sh)/2;
         ctx.drawImage(water.copy,sx,sy,sw,sh,water.x*scale,water.y*scale,water.w*scale,water.h*scale);
       }
+      // WebKit can draw an SVG before the pictures inlined in it have decoded,
+      // leaving them blank on the first draw (WebKit bug 39059, open since
+      // 2010). A throwaway draw starts their decoding; the real one follows.
+      if (embedded && WEBKIT_SVG_RACE) {
+        const prime = document.createElement('canvas'); prime.width = prime.height = 1;
+        prime.getContext('2d').drawImage(image, 0, 0);
+        await new Promise(resolve => setTimeout(resolve, 120));
+        prime.getContext('2d').drawImage(image, 0, 0);
+      }
       ctx.drawImage(image,0,0);
       if(!low&&new URLSearchParams(location.search).has('book-debug')){
         document.querySelector('[data-book-snapshot="'+ids[index]+'"]')?.remove();
@@ -616,6 +638,35 @@
         await new Promise(resolve => setTimeout(resolve, 40));
       }
     } finally { warmingLow = false; }
+  }
+  // Phones: a touch stops a warm-up pass (it restarts once things are quiet), so
+  // snapshot work never sits between a finger and its response.
+  document.addEventListener('pointerdown', () => { if (narrow()) scheduleWarm(); }, { capture: true, passive: true });
+  // Phones leave pictures on hidden pages unloaded until needed. Once the book
+  // is quiet, the rest are fetched in the background — nearest pages first,
+  // low priority, two at a time — so a page's pictures are there when it opens.
+  let preloading = false;
+  async function preloadPictures(generation) {
+    if (preloading || !narrow()) return;
+    preloading = true;
+    try {
+      const order = pages.map((_, i) => i).sort((a, b) => Math.abs(a - current) - Math.abs(b - current));
+      const queue = order.flatMap(i => [...pages[i].querySelectorAll('img')]).filter(img => !img.complete || !img.naturalWidth);
+      const one = img => new Promise(resolve => {
+        if (img.complete && img.naturalWidth) return resolve();
+        const done = () => { clearTimeout(timer); resolve(); };
+        const timer = setTimeout(done, 8000);
+        img.addEventListener('load', done, { once: true }); img.addEventListener('error', done, { once: true });
+        img.fetchPriority = 'low'; img.loading = 'eager';
+      });
+      const worker = async () => {
+        while (queue.length) {
+          if (active || document.hidden || generation !== warmGeneration) return;
+          await one(queue.shift());
+        }
+      };
+      await Promise.all([worker(), worker()]);
+    } finally { preloading = false; }
   }
   async function warm() {
     // A request that arrives mid-pass (the Work sheet changing while an earlier
@@ -658,7 +709,16 @@
         await new Promise(resolve=>setTimeout(resolve,50));
       } catch { /* Retry on actual navigation. */ }
     }
-
+    if (sink) {
+      // Two pages away: 1x copies, the in-between sheet of a quick double tap
+      // on the room guide, so the second turn does not stop to draw it.
+      for (const index of [current - 2, current + 2]) {
+        if (index < 0 || index >= pages.length) continue;
+        if (active || detailOpen() || document.hidden || generation!==warmGeneration) return;
+        try { sink.cacheImage(await texture(index, false, true)); await new Promise(resolve=>setTimeout(resolve,50)); } catch { /* Drawn on the tap instead. */ }
+      }
+      preloadPictures(generation);
+    }
     } catch { /* Navigation has a no-animation fallback. */ }
     finally { warming = false; if (rewarm) { rewarm = false; scheduleWarm(); } }
   }

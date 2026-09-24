@@ -18,6 +18,9 @@
 .room-menu[hidden] { display: none; }
 @media (max-width: 760px) {
   :root { --guide-h: calc(52px + env(safe-area-inset-bottom, 0px)); }
+  /* No double-tap zoom on a phone: it held back every second quick tap (a tap
+     on "next" twice in a row was read as a zoom gesture). Pinch zoom stays. */
+  html { touch-action: manipulation; }
   .site-header .nav { min-height: 56px; padding: 0; flex-wrap: nowrap; justify-content: flex-start; gap: 0; }
   .site-header .brand, .site-header .nav-links { display: none; }
   .menu-toggle { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; margin-left: -12px; padding: 0; border: 0; background: none; color: var(--ink); cursor: pointer; -webkit-tap-highlight-color: transparent; }
@@ -47,8 +50,10 @@
    Always on screen; the pages keep its height clear at their end. Colours
    follow the page, like the header: the sky's ink on Home, dark on Contact. */
 @media (max-width: 760px) {
-  .room-guide { --guide-light: rgba(34, 107, 136, .14); position: fixed; left: 0; right: 0; bottom: 0; z-index: 12; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; height: var(--guide-h); padding: 0 8px env(safe-area-inset-bottom, 0px); box-sizing: border-box; background: rgba(251, 253, 253, .94); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border-top: 1px solid rgba(23, 51, 68, .10); color: var(--ink); font-size: .8125rem; }
-  .room-step { position: relative; display: inline-flex; align-items: center; gap: 8px; min-width: 44px; min-height: 44px; padding: 0 10px; border: 0; background: none; color: inherit; font: inherit; letter-spacing: .02em; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  /* One plain white bar on every page: no blur of what is behind it and no
+     colour change per page, so a turn never has to repaint it. */
+  .room-guide { --guide-light: rgba(34, 107, 136, .14); position: fixed; left: 0; right: 0; bottom: 0; z-index: 12; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; height: var(--guide-h); padding: 0 8px env(safe-area-inset-bottom, 0px); box-sizing: border-box; background: #fff; border-top: 1px solid rgba(23, 51, 68, .10); color: var(--ink); font-size: .8125rem; }
+  .room-step { position: relative; display: inline-flex; align-items: center; gap: 8px; min-width: 44px; min-height: 44px; padding: 0 10px; border: 0; background: none; color: inherit; font: inherit; letter-spacing: .02em; cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
   .room-step--prev { justify-self: start; }
   .room-step--next { justify-self: end; }
   .room-step[hidden] { display: inline-flex; visibility: hidden; }
@@ -59,18 +64,20 @@
   .room-step.is-lit .room-chevron { stroke-width: 1.6; }
   .room-step.is-pressed .room-step-light { opacity: 1; transform: scale(1.25); transition-duration: .2s; }
   .room-count { color: #6f8793; font-size: .6875rem; letter-spacing: .18em; font-variant-numeric: tabular-nums; }
-  /* On Home the guide lies over the sea: a veil of the sky's own colour keeps
-     the sky's ink readable on water by day and by night. */
-  .room-guide[data-page="hero"] { --guide-light: var(--sky-glow, rgba(255, 250, 240, .55)); background: transparent; border-top-color: transparent; color: var(--sky-ink); text-shadow: 0 0 10px var(--sky-halo, transparent), 0 0 2px var(--sky-halo, transparent); }
-  .room-guide[data-page="hero"]::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--sky-base, #1b2a44); opacity: .62; }
-  .room-guide[data-page="hero"] .room-count { color: var(--sky-muted, #8fabb9); }
-  .room-guide[data-page="contact"] { --guide-light: rgba(233, 238, 241, .16); background: rgba(20, 55, 72, .96); border-top-color: #416371; color: #dfe4e3; }
-  .room-guide[data-page="contact"] .room-count { color: #8fabb9; }
   body.work-detail-open .room-guide { display: none; }
   /* Contact: the same parts in the same order as the desktop — times, links,
-     note — stacked instead of side by side. Side by side at phone width the
-     links had a 97 px column and sat out of line with the times. */
-  .footer-grid { grid-template-columns: minmax(0, 1fr); gap: 44px; align-items: start; }
+     note — stacked instead of side by side, from the top of the page, the
+     times centred. The times' grid gets an empty column on each side, so the
+     numerals sit on the page's centre line and the words (shown on a tap)
+     hug them from the left. */
+  footer.book-sheet { align-items: flex-start; padding-top: 44px; }
+  .footer-grid { grid-template-columns: minmax(0, 1fr); gap: 48px; align-items: start; }
+  #contact-sun { justify-self: stretch; }
+  .sun { display: block; }
+  .sun-grid { grid-template-columns: 1fr max-content max-content 1fr; }
+  .sun-grid > .sun-key:not([data-col]), .sun-key[data-row] { grid-column: 1; }
+  .sun-key[data-col="0"], .sun-cell[data-col="0"] { grid-column: 2; }
+  .sun-key[data-col="1"], .sun-cell[data-col="1"] { grid-column: 3; }
   /* Keep the guide's height clear at the end of each page. */
   .work, .method, .about { padding-bottom: calc(54px + var(--guide-h)); }
   .art-collection { padding-bottom: calc(clamp(20px, 4vh, 48px) + var(--guide-h)); }

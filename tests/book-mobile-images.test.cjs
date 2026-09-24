@@ -1,0 +1,20 @@
+const {readFileSync}=require('node:fs');
+const vm=require('node:vm');
+const assert=require('node:assert/strict');
+const source=readFileSync(require('node:path').join(__dirname,'../dist/book.js'),'utf8');
+const fn=source.match(/async function preparePageImages\(index\) \{[\s\S]*?\n  \}/)[0];
+const bounds={top:0,bottom:800,left:0,right:390,width:390,height:800};
+let visibleDecodes=0,hiddenDecodes=0;
+const visible={loading:'lazy',getBoundingClientRect:()=>({...bounds,height:200,bottom:200}),decode:async()=>{visibleDecodes++}};
+const offscreen={loading:'lazy',getBoundingClientRect:()=>({...bounds,top:1200,bottom:1400}),decode:async()=>{hiddenDecodes++}};
+const page={hidden:true,scrollTop:0,querySelectorAll:()=>[visible,offscreen],getBoundingClientRect:()=>bounds};
+const context={pages:[page],scrollPositions:[0],inView:(r,v)=>r.bottom>v.top&&r.top<v.bottom};
+(async()=>{
+  await vm.runInNewContext(`${fn};preparePageImages(0)`,context);
+  assert.equal(visibleDecodes,1);
+  assert.equal(visible.loading,'eager');
+  assert.equal(hiddenDecodes,0);
+  assert.equal(offscreen.loading,'lazy');
+  assert.equal(page.hidden,true);
+  console.log('PASS: mobile preparation leaves offscreen images lazy and restores sheet visibility');
+})().catch(error=>{console.error(error);process.exitCode=1});

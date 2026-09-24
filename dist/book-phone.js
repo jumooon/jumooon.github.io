@@ -236,7 +236,7 @@ window.createBookPhone = function(core) {
     const S=loc(shade,['size','scale','axisPoint','axisNormal','radius','strength']);
     const uvLoc=gl.getAttribLocation(sheet,'uv'),cornerLoc=gl.getAttribLocation(shade,'corner');
     // Uploaded snapshots, newest last. The one in use is never evicted.
-    const textures=new Map();let bound=null,scale=1,W=0,H=0;
+    const textures=new Map();let bound=null,scale=1,W=0,H=0,textureBytes=0;
     function cacheImage(image){
       if(textures.has(image)){const t=textures.get(image);textures.delete(image);textures.set(image,t);return t}
       const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
@@ -248,8 +248,12 @@ window.createBookPhone = function(core) {
       gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
       if(aniso)gl.texParameterf(gl.TEXTURE_2D,aniso.TEXTURE_MAX_ANISOTROPY_EXT,Math.min(8,gl.getParameter(aniso.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));
-      textures.set(image,t);
-      while(textures.size>4){const [old,tex]=[...textures].find(([img])=>img!==bound)||[];if(!old)break;gl.deleteTexture(tex);textures.delete(old)}
+      textures.set(image,t);textureBytes+=image.width*image.height*4;
+      while(textures.size>1&&(textures.size>3||textureBytes>32*1024*1024)){
+        const [old,tex]=[...textures].find(([img])=>img!==bound&&img!==image)||[];
+        if(!old)break;
+        gl.deleteTexture(tex);textures.delete(old);textureBytes-=old.width*old.height*4;
+      }
       return t;
     }
     return {

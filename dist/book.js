@@ -240,18 +240,19 @@
     syncArrows();
   }
 
+  let warmGeneration = 0;
   function scheduleWarm() {
+    const generation = ++warmGeneration;
     clearTimeout(warmTimer);
     // Do not start image encoding / GPU uploads just as the destination arrives.
     warmTimer=setTimeout(()=>{
-      if('requestIdleCallback' in window)window.requestIdleCallback(()=>{if(!active)warm()});
-      else if(!active)warm();
+      if('requestIdleCallback' in window)window.requestIdleCallback(()=>{if(!active && generation===warmGeneration && !document.hidden)warm()});
+      else if(!active && generation===warmGeneration && !document.hidden)warm();
     },900);
   }
 
   async function preparePageImages(index) {
     const page=pages[index],images=[...page.querySelectorAll('img')];
-    images.forEach(img=>{img.loading='eager'});
     // Wait only for the images in the sheet's visible window. decode() waits on
     // every image it is given, and Chrome drops the decoded pixels of images that
     // are off screen, so asking for all of them held the turn on pictures nobody
@@ -272,6 +273,7 @@
     // turn the page. Past the cap an image may pop in; the page still turns.
     const cap=typeof setTimeout==='function'?new Promise(resolve=>setTimeout(resolve,400)):null;
     const decoded=Promise.all(shown.map(async img=>{
+      img.loading='eager';
       try { await img.decode(); } catch { /* A failed image must not block navigation. */ }
     }));
     await (cap?Promise.race([decoded,cap]):decoded);
@@ -548,7 +550,7 @@
       return canvas;
     })();
     cache.set(index,{key,promise});
-    while(cache.size>6)cache.delete(cache.keys().next().value);
+    while(cache.size>(narrow()?3:6))cache.delete(cache.keys().next().value);
     promise.catch(()=>{if(cache.get(index)?.promise===promise)cache.delete(index)});
     return promise;
   }
@@ -560,10 +562,11 @@
     // A case study is a separate reading mode that never turns (see go()), so
     // nothing is rasterised while one is open — the live dashboard gets the
     // machine to itself. All work sends work:changed, which warms again.
-    if (detailOpen()) return;
+    if (detailOpen() || document.hidden) return;
     if (warming) { rewarm = true; return; }
     if (active || reduced.matches || !book.clientWidth) return;
     warming = true;
+    const generation = warmGeneration;
     try {
     // A phone curls with its own renderer (book-phone.js); warm snapshots are
     // uploaded there instead, so a swipe never waits on a texture upload.
@@ -579,10 +582,10 @@
     // its neighbours; the desktop riffle may need up to six.
     const order = pages.map((_,i)=>i).sort((a,b)=>Math.abs(a-current)-Math.abs(b-current)).slice(0,narrow()?3:6);
     for (const index of order) {
-      if(active || detailOpen()) return;
+      if(active || detailOpen() || document.hidden || generation!==warmGeneration) return;
       try {
         const image = await texture(index);
-        if (active) return;
+        if (active || detailOpen() || document.hidden || generation!==warmGeneration) return;
         (sink || renderer).cacheImage(image);
         // Yield between snapshots/uploads so initial rendering stays responsive.
         await new Promise(resolve=>setTimeout(resolve,50));
@@ -1059,7 +1062,11 @@
     player.configure(window.SITE_MUSIC);player.sync(ocean.describe());
     refreshPages();
     syncPlaces(ocean.describe());
-    pages.forEach(p=>p.querySelectorAll('img').forEach(img=>{img.loading='eager';img.decode().then(()=>{cache.delete(pages.indexOf(p));if(!active)scheduleWarm()}).catch(()=>{})}));
+    pages.forEach(p=>p.querySelectorAll('img').forEach(img=>{
+      // Mobile must not decode every exhibition image on the Home screen.
+      if(narrow()){img.loading='lazy';return}
+      img.loading='eager';img.decode().then(()=>{cache.delete(pages.indexOf(p));if(!active)scheduleWarm()}).catch(()=>{});
+    }));
     settle(current);
     // The entry the visitor landed on becomes the first page of the history.
     if(!history.state){const caseId=/^#work\/[\w-]+$/.test(location.hash)?location.hash.slice(6):null;history.replaceState({page:ids[current],case:caseId,landing:Boolean(caseId)},'',caseId?location.hash:'#'+ids[current])}

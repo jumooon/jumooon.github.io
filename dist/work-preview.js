@@ -157,6 +157,12 @@
       poster.alt = asset.alt;
       stage.append(withWebp(poster, asset));
       poster.src = asset.src;
+      // The picture itself opens the zoom viewer too (Tableau only; the deck's
+      // link still leads to the live deck).
+      if (asset.embedType === 'tableau') {
+        stage.classList.add('is-zoomable');
+        stage.addEventListener('click', () => { if (narrow.matches) zoomView(asset); });
+      }
       figure.append(stage, node('figcaption', '', asset.caption));
       return figure;
     }
@@ -225,11 +231,138 @@
   // (class phone-only; book-phone.css hides it above 760px, where the live
   // dashboard is right there and the link would only send people away).
   function originalLink(asset) {
-    const a = node('a', 'original-link' + (asset.embed ? ' phone-only' : ''), asset.label + ' ↗');
+    const a = node('a', 'original-link' + (asset.embed ? ' phone-only' : ''), asset.embed ? asset.label : asset.label + ' ↗');
     a.href = asset.link;
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
+    // A Tableau dashboard on a phone: Tableau's own phone layout spills off the
+    // screen, so the link opens the whole dashboard picture here instead, to
+    // pinch and pan (zoomView). Wider screens never see this link.
+    if (asset.embedType === 'tableau') a.addEventListener('click', e => {
+      if (!narrow.matches) return;
+      e.preventDefault();
+      zoomView(asset);
+    });
     return a;
+  }
+
+  // Full-screen picture viewer for phones: fit to the screen, pinch or
+  // double-tap to zoom, drag to pan, "Close" to leave. It moves the picture
+  // with one transform (no layout per frame) and takes every gesture itself
+  // (touch-action:none), so the page underneath never scrolls or zooms.
+  function zoomView(asset) {
+    if (document.querySelector('.zoom-view')) return;
+    const view = node('div', 'zoom-view');
+    view.setAttribute('role', 'dialog');
+    view.setAttribute('aria-modal', 'true');
+    view.setAttribute('aria-label', asset.alt);
+    const close = node('button', 'zoom-close', 'Close');
+    close.type = 'button';
+    const hint = node('p', 'zoom-hint', 'Pinch or double-tap to zoom');
+    const img = node('img', 'zoom-image');
+    img.alt = asset.alt;
+    img.decoding = 'async';
+    img.draggable = false;
+    img.style.width = asset.width + 'px';   // scale math works in picture pixels
+    img.style.height = asset.height + 'px';
+    // The full-size WebP when there is one (every browser that runs this
+    // viewer reads WebP); the original file if it fails.
+    const webp = WEBP[asset.src] ? asset.src.replace(/\.(jpe?g|png)$/i, '.webp') : null;
+    img.onerror = () => { if (img.src.endsWith('.webp')) img.src = asset.src; };
+    img.src = webp || asset.src;
+    view.append(img, close, hint);
+    document.body.append(view);
+    document.body.classList.add('zoom-open');
+
+    const W = () => view.clientWidth, H = () => view.clientHeight;
+    const iw = asset.width, ih = asset.height;
+    let fit = 1, s = 1, tx = 0, ty = 0;
+    const clamp = () => {
+      s = Math.min(Math.max(s, fit), fit * 5);
+      const w = iw * s, h = ih * s;
+      tx = w <= W() ? (W() - w) / 2 : Math.min(0, Math.max(W() - w, tx));
+      ty = h <= H() ? (H() - h) / 2 : Math.min(0, Math.max(H() - h, ty));
+    };
+    const draw = () => { img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + s + ')'; };
+    const layout = () => { fit = Math.min(W() / iw, H() / ih); s = fit; clamp(); draw(); };
+    // Zoom to scale `to`, keeping the picture point under (x, y) where it is.
+    const zoomAt = (to, x, y) => {
+      const px = (x - tx) / s, py = (y - ty) / s;
+      s = to; tx = x - px * s; ty = y - py * s;
+    };
+    layout();
+
+    const pointers = new Map();
+    let start = null, lastTap = 0, moved = false;
+    const begin = () => {
+      const pts = [...pointers.values()];
+      if (pts.length === 1) start = {s, tx, ty, x: pts[0].x, y: pts[0].y};
+      else {
+        const [a, b] = pts;
+        const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+        start = {s, d: Math.hypot(a.x - b.x, a.y - b.y) || 1, px: (mx - tx) / s, py: (my - ty) / s};
+      }
+    };
+    view.addEventListener('pointerdown', e => {
+      if (e.target === close) return;
+      view.setPointerCapture(e.pointerId);
+      pointers.set(e.pointerId, {x: e.clientX, y: e.clientY});
+      if (pointers.size === 1) moved = false;
+      if (pointers.size <= 2) begin();
+      hint.classList.add('is-gone');
+    });
+    view.addEventListener('pointermove', e => {
+      if (!pointers.has(e.pointerId) || !start) return;
+      pointers.set(e.pointerId, {x: e.clientX, y: e.clientY});
+      const pts = [...pointers.values()];
+      if (pts.length >= 2 && start.d) {
+        const [a, b] = pts;
+        const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+        s = Math.min(Math.max(start.s * Math.hypot(a.x - b.x, a.y - b.y) / start.d, fit * .8), fit * 5);
+        tx = mx - start.px * s; ty = my - start.py * s;
+        moved = true;
+      } else if (pts.length === 1 && start.x !== undefined) {
+        const dx = pts[0].x - start.x, dy = pts[0].y - start.y;
+        if (Math.hypot(dx, dy) > 8) moved = true;
+        tx = start.tx + dx; ty = start.ty + dy;
+        const w = iw * s, h = ih * s;
+        if (w <= W()) tx = (W() - w) / 2;
+        if (h <= H()) ty = (H() - h) / 2;
+      }
+      draw();
+    });
+    const end = e => {
+      if (!pointers.delete(e.pointerId)) return;
+      if (pointers.size) { begin(); return; }
+      start = null;
+      if (!moved && e.type === 'pointerup') {
+        const now = performance.now();
+        if (now - lastTap < 320) {
+          lastTap = 0;
+          zoomAt(s > fit * 1.05 ? fit : fit * 2.5, e.clientX, e.clientY);
+        } else lastTap = now;
+      }
+      img.classList.add('is-settling');
+      clamp(); draw();
+      setTimeout(() => img.classList.remove('is-settling'), 220);
+    };
+    view.addEventListener('pointerup', end);
+    view.addEventListener('pointercancel', end);
+    // Older iOS still starts its own page pinch unless told not to.
+    const noGesture = e => e.preventDefault();
+    view.addEventListener('gesturestart', noGesture);
+    const onResize = () => layout();
+    const onKey = e => { if (e.key === 'Escape') shut(); };
+    addEventListener('resize', onResize);
+    addEventListener('keydown', onKey);
+    function shut() {
+      removeEventListener('resize', onResize);
+      removeEventListener('keydown', onKey);
+      document.body.classList.remove('zoom-open');
+      view.remove();
+    }
+    close.addEventListener('click', shut);
+    close.focus({preventScroll: true});
   }
   function displayArtwork(asset, destination, eager = false) {
     if (asset.layout !== 'pair' || !asset.secondary) return artwork(asset, destination, eager);

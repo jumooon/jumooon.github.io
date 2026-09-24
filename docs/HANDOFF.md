@@ -1,5 +1,13 @@
 # Portfolio page-turn handoff — 2026-09-16
 
+## 2026-09-25 — Phone: Tableau dashboards open as a zoomable picture
+
+On a phone, Tableau's own phone layout spilled off the screen (checked in a 390px frame). So on phones, "Explore dashboard" (Work list and case page) and a tap on the dashboard picture now open a full-screen viewer (work-preview.js `zoomView`, styles at the end of book-phone.css). The viewer shows the full-size WebP, falling back to the PNG. It fits the picture to the screen. Pinch, or double-tap for 2.5x, to zoom (5x at most). Drag to pan. "Close" leaves the viewer. It uses `touch-action:none`, so the page underneath never scrolls or zooms. The Shiny deck link ("View presentation") still opens the live deck.
+- Checked in headless Chromium with CDP touch: pinch, drag, double-tap and close all work; no popups; no page errors. Desktop Work and the three live-embed cases are pixel-identical to before; the viewer never appears there.
+- investment.png is 999px wide (1x), so deep zoom is soft. A 2x export would sharpen it.
+- Shiny deck, found but not fixed here: at phone width, Shiny 1.13 reports the plot size after Reveal's scale (351px instead of 1050px). The server then draws a 351px PNG, and Reveal shrinks it by 0.33 again. Fix belongs in the deck source: give renderPlot fixed pixel width and height.
+- Versions: work-preview.js?v=20260925-zoom, book-phone.css?v=20260925-zoom.
+
 ## 2026-09-25 — Links to live dashboards return on phones
 
 - A phone shows the screenshot of a Tableau / Shiny embed, never the live view,
@@ -8,6 +16,9 @@
   marks it `phone-only`; book-phone.css hides it at 761px and up, where the
   live view is on the page (desktop screenshots of Work and four cases
   identical before/after).
+
+
+Follow-up: the phone-only dashboard/presentation links drop the trailing ↗ (label text only). Links to videos and PDFs keep ↗ on every width, so desktop is unchanged. work-preview.js?v=20260925-links3.
 
 ## 2026-09-25 — Phone turn pace: capped middle, ?curve and ?fps
 

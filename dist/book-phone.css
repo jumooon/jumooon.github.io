@@ -89,3 +89,14 @@
   footer.book-sheet { padding-bottom: calc(30px + var(--guide-h)); }
 }
 @media (max-width: 760px) and (prefers-reduced-motion: reduce) { .room-step-light, .room-chevron { transition: none; } }
+
+/* Zoom viewer for a dashboard picture (work-preview.js zoomView; phones only,
+   nothing creates it on wider screens). */
+.zoom-view { position: fixed; inset: 0; z-index: 50; overflow: hidden; background: var(--paper); touch-action: none; overscroll-behavior: contain; -webkit-user-select: none; user-select: none; }
+.zoom-image { position: absolute; left: 0; top: 0; max-width: none; transform-origin: 0 0; will-change: transform; -webkit-touch-callout: none; }
+.zoom-image.is-settling { transition: transform .2s ease-out; }
+.zoom-close { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 10px); right: 12px; min-width: 64px; height: 40px; padding: 0 14px; border: 1px solid var(--line); border-radius: 20px; background: rgba(255, 255, 255, .92); color: var(--ink); font: inherit; font-size: .875rem; touch-action: manipulation; }
+.zoom-hint { position: absolute; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); margin: 0; text-align: center; color: var(--muted); font-size: .8125rem; pointer-events: none; transition: opacity .4s ease; }
+.zoom-hint.is-gone { opacity: 0; }
+body.zoom-open { overflow: hidden; }
+@media (max-width: 760px) { .embed-stage.is-zoomable { cursor: zoom-in; } }

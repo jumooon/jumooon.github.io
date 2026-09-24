@@ -274,7 +274,9 @@
           a.rel = "noreferrer";
         }
         a.appendChild(el("span", null, l.label));
-        a.appendChild(el("span", null, "↗"));
+        // A drawn arrow, not the "↗" character, which Arial lacks — each device
+        // filled it from a different fallback font, some as an emoji.
+        a.insertAdjacentHTML("beforeend", '<svg class="link-arrow" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 10 10 2M4.5 2H10v5.5"/></svg>');
         links.appendChild(a);
       });
     }

@@ -1,5 +1,52 @@
 # Portfolio page-turn handoff — 2026-09-16
 
+## 2026-09-24 — Phone code split out (book-phone.js / book-phone.css)
+
+- Everything that only happens below 760px now lives in dist/book-phone.js
+  (curl held by the finger, curlTable, slide fallback, Home hint, holdHome,
+  phone touch handlers) and dist/book-phone.css (slide + hint styles,
+  touch-action). Page layout at phone widths stays in notebook.css.
+- book.js keeps the shared engine (snapshots, renderer incl. `single` mode,
+  settle/finish, history, warm, desktop arrows, the tablet quick swipe) and
+  hands book-phone.js a `core` object: functions plus accessors for values it
+  reassigns (pages, ids, current, active, raf, renderer, holdingHome).
+  book.js calls phone.turn() from go() on phones and phone.sync() after each
+  settle. index.html loads book-phone.js before book.js; if it is missing,
+  phones fall back to the desktop turn.
+- tests/book-phone-curl.test.cjs checks the finger mapping (monotonic, tEnd).
+- Re-verified after the split (headless Chromium, CDP touch): curl and
+  no-WebGL slide both pass forward/back/cancel/ends/nav/Back/peek; desktop
+  1280x800 riffles as before; 10/10 tests.
+
+## 2026-09-24 — Phones (≤760px): one-page curl, Home hint, Contact taps
+
+- The phone reads the book one page at a time. book.js keeps the desktop
+  curl but in renderer option `single`: the spine is the left edge (x = 0)
+  and the sheet is the full width; its back is the page colour with the print
+  faintly showing through. Forward, the current page curls away and the next
+  page is live beneath; back, the previous page curls in over the live current
+  page. Only one snapshot per turn (warm() keeps current ±1 on phones).
+- The finger holds the sheet's free edge. curlTable() mirrors the mesh
+  geometry to find, for each pose, how far right the sheet reaches on screen;
+  tEnd is where it has fully passed the spine. Release: past 1/4 or a flick
+  commits, otherwise it falls back. Menu, Back/Forward and the hint run the
+  same curl (turnCurl, 1100 ms, 2 held frames).
+- Home: a touch stops the water and snapshots Home at once (holdHome), so the
+  curl appears as soon as the swipe is recognised (measured 91 ms after
+  touchstart in headless Chromium, against ~1.6 s when the snapshot was taken
+  at recognition). tests/ocean-state covers the hold.
+- Fallback: if a snapshot/WebGL fails, curlBroken switches phones to the live
+  slide (beginSlide: next page laid over from the right, shadow + dim), also
+  used for reduced motion drags. Ends of the book stretch and spring back.
+- Home hint (hintApi): desktop chevron at 30% on Home only; first visit lifts
+  Home's edge 34 px with the label lit (localStorage jm.swipeHint.seen);
+  hidden after the first turn. Tap turns.
+- Contact: sun times are tap-to-reveal on touch (pointerType-aware; mouse
+  hover unchanged). Link arrows are an inline SVG (.link-arrow), not "↗".
+- Verified in headless Chromium 390x844 with CDP touch: forward/back drags,
+  cancel, nav, Back, peek; desktop 1280x800 still riffles (sheets: 2).
+  Not verified on a physical iPhone.
+
 ## 2026-09-24 — Deployment setup (GitHub Pages)
 
 - This file moved from dist/HANDOFF.md to docs/HANDOFF.md so the public site

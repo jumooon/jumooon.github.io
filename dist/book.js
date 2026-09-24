@@ -8,7 +8,7 @@
   // Elapsed-time based; follows native display refresh. 1850 (was 1650): the
   // owner asked for a slightly more unhurried turn.
   const TURN_DURATION = 1850;
-  book.dataset.rendererVersion = '20260918-about-ready';
+  book.dataset.rendererVersion = '20260924-split';
   function rasterScale(w,h,dpr) {
     // Native device pixels, so the raster lines up with the live page it hands
     // over to. The old 4.8-megapixel cap dropped a 1920x895 window at 2x to
@@ -32,10 +32,16 @@
     }
     return {turns,duration:turns[count-1].start+turns[count-1].duration+165};
   }
+  // The turn's eased progress for a pose t in [0,1]: a broader, quieter velocity
+  // curve than quintic-only (less mid-turn rush). Shared by the mesh and by the
+  // phone's curlTable(), which measures the same geometry.
+  function poseProgress(t){return 0.35*t*t*t*(t*(t*6-15)+10)+0.65*(1-Math.cos(Math.PI*t))/2}
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+  // Phones: the same 760px line the stylesheets use (see book-phone.js).
+  const narrowMq = matchMedia('(max-width: 760px)'), narrow = () => narrowMq.matches;
   const cache = new Map(), images = new Map();
   let current = 0, queued = null, active = null, raf = 0, revision = 0, warmTimer;
-  let renderer, warming = false, rewarm = false, arrowsApi = null;
+  let renderer, warming = false, rewarm = false, arrowsApi = null, holdingHome = false;
   const BLANK_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
   const ocean=window.createOcean(document.querySelector('.ocean-scene'));
   // The two cities under the hero title. A click makes the hero show that city's
@@ -196,7 +202,7 @@
     });
   }
   function syncOcean(){
-    const running=!active&&!reduced.matches&&!document.hidden&&ids[current]==='hero';
+    const running=!active&&!holdingHome&&!reduced.matches&&!document.hidden&&ids[current]==='hero';
     ocean.setRunning(running);
   }
 
@@ -543,7 +549,9 @@
       renderer.prepare(front, front, book.clientWidth, book.clientHeight, 1);
       renderer.paint(0.3, book.clientWidth, book.clientHeight, 1);
     }
-    const order = pages.map((_,i)=>i).sort((a,b)=>Math.abs(a-current)-Math.abs(b-current)).slice(0,6);
+    // A phone turns one sheet at a time and only ever needs the current page and
+    // its neighbours; the desktop riffle may need up to six.
+    const order = pages.map((_,i)=>i).sort((a,b)=>Math.abs(a-current)-Math.abs(b-current)).slice(0,narrow()?3:6);
     for (const index of order) {
       if(active || detailOpen()) return;
       try {
@@ -601,12 +609,21 @@
       precision mediump float;
 #endif
       uniform sampler2D frontImage; uniform sampler2D backImage;
-      uniform float direction;
+      uniform float direction; uniform float single; uniform vec3 paper;
       varying vec2 texcoord; varying float shade;
       void main(){
         bool front=(gl_FrontFacing == (direction>0.0));
-        float u=front ? 0.5+direction*texcoord.x*0.5 : 0.5-direction*texcoord.x*0.5;
-        vec4 color=front ? texture2D(frontImage,vec2(u,1.0-texcoord.y)) : texture2D(backImage,vec2(u,1.0-texcoord.y));
+        vec4 color;
+        if(single>0.5){
+          // One page, bound at the left edge: the whole snapshot is the front;
+          // the back is the same sheet's paper with its print faintly showing
+          // through, mirrored as it would be.
+          vec4 c=texture2D(frontImage,vec2(texcoord.x,1.0-texcoord.y));
+          color=front ? c : vec4(mix(c.rgb,paper,0.9),1.0);
+        }else{
+          float u=front ? 0.5+direction*texcoord.x*0.5 : 0.5-direction*texcoord.x*0.5;
+          color=front ? texture2D(frontImage,vec2(u,1.0-texcoord.y)) : texture2D(backImage,vec2(u,1.0-texcoord.y));
+        }
         float edge=smoothstep(0.996,1.0,texcoord.x)*0.065;
         gl_FragColor=vec4(color.rgb*(1.0-shade)+edge,color.a);
       }`));
@@ -664,6 +681,8 @@
     gl.uniform1i(gl.getUniformLocation(program,'frontImage'),0);
     gl.uniform1i(gl.getUniformLocation(program,'backImage'),1);
     const view=gl.getUniformLocation(program,'viewport'),perspective=gl.getUniformLocation(program,'perspective'),dir=gl.getUniformLocation(program,'direction');
+    const singleLoc=gl.getUniformLocation(program,'single'),paperLoc=gl.getUniformLocation(program,'paper');
+    let single=false;
     gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);
     canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();renderer=null;finish(true)});
     return {
@@ -681,7 +700,11 @@
         gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
       },
       // Compile/upload during idle preparation, before the first visible turn.
-      prepare(front,back,w,h,direction) {
+      // options.single: a phone's one-page book — the spine is the left edge and
+      // the sheet is the full width; options.paper is its back's colour (0-1 rgb).
+      prepare(front,back,w,h,direction,options={}) {
+        single=Boolean(options.single);
+        gl.uniform1f(singleLoc,single?1:0);gl.uniform3fv(paperLoc,options.paper||[0.98,0.99,0.99]);
         canvas.style.opacity='1';
         const dpr=rasterScale(w,h,devicePixelRatio);
         const cw=Math.round(w*dpr),ch=Math.round(h*dpr);
@@ -694,9 +717,8 @@
         });
       },
       paint(t,w,h,direction,clear=true) {
-        // Broader, quieter velocity curve than quintic-only (less mid-turn rush).
-        const progress=0.35*t*t*t*(t*(t*6-15)+10)+0.65*(1-Math.cos(Math.PI*t))/2, phase=Math.PI*progress;
-        const lift=t===1?0:Math.sin(phase),half=w/2,step=half/cols;
+        const progress=poseProgress(t), phase=Math.PI*progress;
+        const lift=t===1?0:Math.sin(phase),half=single?w:w/2,origin=single?0:w/2,step=half/cols;
         const base=phase-lift*0.78*0.48;
         const baseSin=Math.sin(base),baseCos=Math.cos(base);
         // Landing. The sheet's lift toward the viewer (depth, which perspective
@@ -728,7 +750,7 @@
             const j=(row*(cols+1)+col)*6;
             // Exact terminal coordinates: no accumulated trig/perspective drift
             // at the frame where the raster hands ownership to the live page.
-            data[j]=t===1?half-direction*u*half:half+direction*x;
+            data[j]=t===1?origin-direction*u*half:origin+direction*x;
             data[j+1]=v*h+lift*u*u*(0.5-v)*6*land;
             data[j+2]=t===1?0:z*0.68*land;
             data[j+5]=t===1?0:0.10*Math.abs(sn)+0.025*lift*edgeShade[col];
@@ -747,6 +769,7 @@
     const state=active;
     active=null;cancelAnimationFrame(raf);
     state.overlay?.remove();
+    state.cleanup?.();
     renderer?.releaseImages();
     book.classList.remove('is-page-turning');book.removeAttribute('aria-busy');
     const destination=queued ?? state.destination;
@@ -854,6 +877,7 @@
     if(target===current)return;
     pages[current]?.querySelectorAll('video').forEach(video => video.pause());
     if(reduced.matches){settle(target);return}
+    if(narrow()&&phone){phone.turn(target);return}
     const destination=target;
     // At most four physical sheets / five snapshots per GPU batch, even after
     // adding many menu entries. The remaining distance continues automatically.
@@ -882,11 +906,13 @@
   // as its "All work" link.
   function pageFromHash(){return location.hash.slice(1).split('/')[0]||'hero'}
   if('scrollRestoration' in history)history.scrollRestoration='manual';
-  function navigate(target){
-    if(detailOpen()||target<0||target>=ids.length)return;
+  function pushPage(target){
     const id=ids[target];
     if(!history.state||history.state.page!==id||history.state.case)history.pushState({page:id},'','#'+id);
-    go(target);
+  }
+  function navigate(target){
+    if(detailOpen()||target<0||target>=ids.length)return;
+    pushPage(target);go(target);
   }
   window.addEventListener('popstate',event=>{
     const state=event.state||{page:pageFromHash()};
@@ -905,8 +931,8 @@
   // Page arrows: a faint chevron at each side edge, raised when the pointer
   // comes within reach of that edge, lit (with the neighbouring page's name)
   // on hover, swelling for a moment on press. The keyboard's left/right keys
-  // flash the matching arrow and turn; on touch screens a horizontal swipe does
-  // the same. Hidden in a case study, whose only exit is "All work".
+  // flash the matching arrow and turn; on wider touch screens a horizontal swipe
+  // does the same. Hidden in a case study, whose only exit is "All work".
   arrowsApi=(()=>{
     const nav=document.createElement('nav');
     nav.className='page-arrows';nav.setAttribute('aria-label','Previous and next page');
@@ -937,14 +963,16 @@
       e.preventDefault();b.classList.add('is-flash');setTimeout(()=>b.classList.remove('is-flash'),480);
       press(b);navigate(current+(e.key==='ArrowLeft'?-1:1));
     });
-    let touch=null;
+    // A quick horizontal swipe on a touch screen wider than a phone turns the
+    // page as the arrows would. Phones (book-phone.js) hold the page instead.
+    let swipe=null;
     book.addEventListener('touchstart',e=>{
       const t=e.touches[0];
-      touch=e.touches.length===1&&!e.target.closest('.collection-wall, .embed-stage, iframe, input, textarea')?{x:t.clientX,y:t.clientY,at:performance.now()}:null;
+      swipe=!narrow()&&e.touches.length===1&&!e.target.closest('.collection-wall, .embed-stage, iframe, input, textarea')?{x:t.clientX,y:t.clientY,at:performance.now()}:null;
     },{passive:true});
     book.addEventListener('touchend',e=>{
-      if(!touch||detailOpen())return;
-      const t=e.changedTouches[0],dx=t.clientX-touch.x,dy=t.clientY-touch.y,dt=performance.now()-touch.at;touch=null;
+      const sw=swipe;swipe=null;if(!sw||narrow()||detailOpen())return;
+      const t=e.changedTouches[0],dx=t.clientX-sw.x,dy=t.clientY-sw.y,dt=performance.now()-sw.at;
       if(Math.abs(dx)>64&&Math.abs(dx)>2*Math.abs(dy)&&dt<700)navigate(current+(dx>0?-1:1));
     },{passive:true});
     return {sync(){
@@ -954,9 +982,33 @@
       if(!next.hidden){const n=nameOf(current+1);next.querySelector('.page-arrow-label').textContent=n;next.setAttribute('aria-label','Next page: '+n)}
     }};
   })();
-  function syncArrows(){if(arrowsApi)arrowsApi.sync()}
+
+  // Phones (≤760px) read the book one page at a time; that lives in
+  // book-phone.js, which is handed this view of the engine. Everything else —
+  // snapshots, the mesh, settle/finish, history — is shared. Values the engine
+  // reassigns (pages, ids, current, active, raf, renderer) are passed as
+  // accessors, never copied. Without book-phone.js a phone gets the desktop turn.
+  const core={
+    book,header,cache,reduced,narrow,detailOpen,finish,syncOcean,updateHeader,texture,preparePageImages,navigate,pushPage,poseProgress,
+    get pages(){return pages},get ids(){return ids},get current(){return current},get scrollPositions(){return scrollPositions},
+    get active(){return active},set active(v){active=v},
+    get raf(){return raf},set raf(v){raf=v},
+    get renderer(){return renderer||(renderer=createRenderer())},
+    get holdingHome(){return holdingHome},set holdingHome(v){holdingHome=v}
+  };
+  const phone=window.createBookPhone?window.createBookPhone(core):null;
+  function syncArrows(){if(arrowsApi)arrowsApi.sync();if(phone)phone.sync()}
   syncArrows();
-  window.addEventListener('resize',()=>{measureHeader();cache.clear();finish(true);scheduleWarm()});
+  // Phone browsers fire resize whenever their toolbar slides away during a
+  // vertical scroll; that must not cut a slide short, so only a width change does.
+  let lastWidth=innerWidth;
+  window.addEventListener('resize',()=>{
+    measureHeader();cache.clear();
+    const widthChanged=innerWidth!==lastWidth;lastWidth=innerWidth;
+    if(widthChanged||!(active?.slide||active?.curl))finish(true);
+    scheduleWarm();
+  });
+  narrowMq.addEventListener('change',()=>{finish(true);syncArrows();scheduleWarm()});
   reduced.addEventListener('change',()=>{if(reduced.matches)finish(true);syncOcean();cache.delete(ids.indexOf('hero'))});
   document.addEventListener('visibilitychange',syncOcean);
   // Opening or closing a case study changes only the Work sheet: drop that one

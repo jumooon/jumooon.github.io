@@ -66,14 +66,29 @@
     });
     box.append(grid);
 
-    // Light only the city, the event and the numeral being pointed at.
+    // Light only the city, the event and the numeral being pointed at. A mouse
+    // does it by hovering. A finger cannot hover, so a tap lights a numeral, a
+    // second tap on it or a tap anywhere else puts it out. (Taps also send
+    // compatibility mouse events; pointerover carries the pointer type, so those
+    // are told apart and do not light the cell before the tap toggles it.)
     const set = target => {
       const c = target && target.closest ? target.closest('.sun-cell') : null;
       if (c) { box.dataset.col = c.dataset.col; box.dataset.row = c.dataset.row; }
       else { delete box.dataset.col; delete box.dataset.row; }
     };
-    grid.addEventListener('mouseover', event => set(event.target));
-    grid.addEventListener('mouseleave', () => set(null));
+    const lit = c => box.dataset.col === c.dataset.col && box.dataset.row === c.dataset.row;
+    let lastPointer = 'mouse';
+    grid.addEventListener('pointerover', event => { if (event.pointerType === 'mouse') set(event.target); });
+    grid.addEventListener('pointerleave', event => { if (event.pointerType === 'mouse') set(null); });
+    grid.addEventListener('pointerdown', event => { lastPointer = event.pointerType; });
+    grid.addEventListener('click', event => {
+      if (lastPointer === 'mouse') return;
+      const c = event.target.closest('.sun-cell');
+      set(c && !lit(c) ? c : null);
+    });
+    document.addEventListener('pointerdown', event => {
+      if (event.pointerType !== 'mouse' && !box.contains(event.target)) set(null);
+    }, { passive: true });
     box.addEventListener('focus', () => { box.dataset.col = '0'; box.dataset.row = '0'; });
     box.addEventListener('blur', () => set(null));
     return box;

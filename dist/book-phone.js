@@ -370,13 +370,38 @@ window.createBookPhone = function(core) {
   }
   function endCurl(state,commit){
     if(core.active!==state)return;
-    if(commit)book.dataset.lastTurn=JSON.stringify({mode:'curl',from:core.ids[state.from],to:core.ids[state.target],sheets:state.sheets.length});
+    if(commit)book.dataset.lastTurn=JSON.stringify({mode:'curl',from:core.ids[state.from],to:core.ids[state.target],sheets:state.sheets.length,...state.stats});
     else state.target=state.destination=state.from;
     finish();
   }
   // A whole turn. One page: 1100 ms. A jump: each sheet takes 900 ms and the
   // next starts 300 ms after the one before, so the pages fan through.
   const RIFFLE_MS=900,RIFFLE_GAP=300;
+  // The turn's pace. The cubic ease-in-out gives the phone turn its feel — a
+  // slow lift and a slow landing — but at its middle it runs at 3x its average
+  // speed, and at 60 frames a second that is a 50 px jump per frame: the part
+  // that looked choppy. turnEase keeps the cubic's shape at both ends and caps
+  // the middle at 2.2x (≈37 px a frame), holding that speed for a short
+  // stretch instead of peaking, over the same duration. The ends are cubic
+  // curves a·t³/3; a is the one steepness that makes the whole run exactly 1.
+  // ?curve=now keeps the plain cubic, for side-by-side comparison.
+  const TURN_PEAK=2.2;
+  const turnEase=(()=>{
+    const V=TURN_PEAK,a=Math.pow(4/3*Math.pow(V,1.5)/(V-1),2),t1=Math.sqrt(V/a),head=a*t1*t1*t1/3;
+    return t=>t<=0?0:t>=1?1:t<t1?a*t*t*t/3:t<1-t1?head+V*(t-t1):1-a*(1-t)*(1-t)*(1-t)/3;
+  })();
+  const params=new URLSearchParams(location.search);
+  const paceOf=params.get('curve')==='now'?easeInOut:turnEase;
+  // ?fps: after each turn, a small note of how it was actually drawn — frames
+  // per second, frames drawn, frames missed and the longest gap — to tell a
+  // 60 Hz cap (every gap ~16.7 ms) from dropped frames (gaps of 33 ms and more).
+  const fpsNote=params.has('fps')?(()=>{
+    const n=document.createElement('div');
+    n.setAttribute('aria-hidden','true');
+    n.style.cssText='position:fixed;top:8px;right:8px;z-index:40;padding:6px 9px;border-radius:6px;background:rgba(16,32,44,.86);color:#fff;font:12px/1.35 ui-monospace,Menlo,monospace;pointer-events:none;white-space:pre;opacity:0;transition:opacity .2s';
+    document.body.append(n);let timer=0;
+    return text=>{n.textContent=text;n.style.opacity='1';clearTimeout(timer);timer=setTimeout(()=>{n.style.opacity='0'},4000)};
+  })():null;
   function curlTo(target){
     const state=beginCurl(target);core.active=state;syncOcean();
     book.setAttribute('aria-busy','true');
@@ -384,19 +409,31 @@ window.createBookPhone = function(core) {
       const count=state.sheets.length,dur=count===1?CURL_MS:RIFFLE_MS,total=dur+(count-1)*RIFFLE_GAP;
       // Two frames held at the first pose before anything moves: the pages'
       // uploads and the live page's first layout land there, not mid-motion.
-      let start,hold=2;
+      let start,last,hold=2;const gaps=[];
       cancelAnimationFrame(core.raf);
       function step(ts){
         if(core.active!==state)return;
         if(hold>0){hold--;state.draw();core.raf=requestAnimationFrame(step);return}
         if(start===undefined)start=ts;
+        if(last!==undefined)gaps.push(ts-last);last=ts;
         const t=ts-start;
         for(const s of state.sheets){
-          const e=easeInOut(Math.max(0,Math.min(1,(t-s.order*RIFFLE_GAP)/dur)));
+          const e=paceOf(Math.max(0,Math.min(1,(t-s.order*RIFFLE_GAP)/dur)));
           s.D=state.forward?e*state.gone:(1-e)*state.gone;
         }
         state.draw();
-        if(t<total)core.raf=requestAnimationFrame(step);else endCurl(state,true);
+        if(t<total)core.raf=requestAnimationFrame(step);
+        else{
+          // The display's frame interval: the shortest regular gap, taken as no
+          // longer than 60 Hz's 16.7 ms (every phone refreshes at least that
+          // often, so uniformly slow frames still count as missed ones).
+          const sorted=[...gaps].sort((x,y)=>x-y),frame=Math.min(1000/60,sorted[Math.floor(sorted.length*.1)]||1000/60);
+          const missed=gaps.reduce((m,g)=>m+Math.max(0,Math.round(g/frame)-1),0);
+          const stats={frames:gaps.length+1,fps:Math.round(gaps.length*1000/Math.max(1,t)),refreshHz:Math.round(1000/frame),missed,longestMs:Math.round(Math.max(0,...gaps)),curve:paceOf===turnEase?'capped':'cubic'};
+          state.stats=stats;
+          fpsNote?.(stats.fps+' fps  ('+stats.refreshHz+' Hz display)\n'+stats.frames+' frames, '+stats.missed+' missed\nlongest gap '+stats.longestMs+' ms · '+stats.curve);
+          endCurl(state,true);
+        }
       }
       core.raf=requestAnimationFrame(step);
     };

@@ -220,8 +220,12 @@
     return figure;
   }
 
+  // For a live embed (Tableau, Shiny) the link is a phone's way in: a phone
+  // shows the screenshot, not the live dashboard, so there the link is shown
+  // (class phone-only; book-phone.css hides it above 760px, where the live
+  // dashboard is right there and the link would only send people away).
   function originalLink(asset) {
-    const a = node('a', 'original-link', asset.label + ' ↗');
+    const a = node('a', 'original-link' + (asset.embed ? ' phone-only' : ''), asset.label + ' ↗');
     a.href = asset.link;
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
@@ -262,9 +266,8 @@
     if (asset) {
       const gallery = node('div', 'detail-gallery');
       gallery.append(asset.embed ? embedFigure(asset) : displayArtwork(asset, asset.src, true));
-      // No "Explore dashboard" link beside a live embed: the dashboard is right
-      // there, and the link only sent people away from it.
-      if (asset.link && !asset.embed) gallery.append(originalLink(asset));
+      // Beside a live embed the link is for phones only (see originalLink).
+      if (asset.link) gallery.append(originalLink(asset));
       if (asset.note) gallery.append(node('p', 'artifact-note', asset.note));
       if (asset.secondary && asset.layout !== 'pair') gallery.append(artwork(asset.secondary, asset.secondary.src));
       detail.append(gallery);
@@ -359,7 +362,7 @@
           const story = node('a', '', 'Read the story');
           story.href = '#' + c.id;
           actions.append(story);
-          if (asset.link && !asset.embed) actions.append(originalLink(asset));
+          if (asset.link) actions.append(originalLink(asset));
           copy.append(actions);
           caption.append(copy);
           exhibit.append(label, displayArtwork(asset, '#' + c.id, c.id === 'investment'), caption);

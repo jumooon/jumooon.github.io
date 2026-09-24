@@ -1,5 +1,29 @@
 # Portfolio page-turn handoff — 2026-09-16
 
+## 2026-09-25 — Links to live dashboards return on phones
+
+- A phone shows the screenshot of a Tableau / Shiny embed, never the live view,
+  so its "Explore dashboard" / "View presentation" link is back on phones —
+  in the Work list and on the case page — opening in a new tab. originalLink()
+  marks it `phone-only`; book-phone.css hides it at 761px and up, where the
+  live view is on the page (desktop screenshots of Work and four cases
+  identical before/after).
+
+## 2026-09-25 — Phone turn pace: capped middle, ?curve and ?fps
+
+- Why the phone turn looked choppy: its cubic ease-in-out peaks at 3x its
+  average speed; the fold travels ~1100 px in 1.1 s, so mid-turn it jumped
+  ~50 px per frame at 60 Hz (iOS Safari draws pages at 60 fps by default even
+  on 120 Hz iPhones; Low Power Mode halves that).
+- turnEase (book-phone.js): cubic-shaped lift and landing (a·t³/3, a = 13.15),
+  a steady stretch in the middle at TURN_PEAK = 2.2x average (~37 px/frame),
+  same 1100 ms (riffle 900 ms/sheet). Within 0.012 of the cubic at t ≤ 0.3 and
+  t ≥ 0.7. tests/book-phone-pace.test.cjs checks ends, cap and continuity.
+- ?curve=now uses the previous cubic, for comparison on the phone.
+- ?fps shows, after each phone turn, fps, the display rate, frames drawn,
+  frames missed and the longest gap (also in book.dataset.lastTurn): a clean
+  60 Hz cap reads ~60 fps with 0 missed; dropped frames show as missed.
+
 ## 2026-09-25 — Phone feedback round (pacing, taps, guide, Contact, images)
 
 - Pacing: one page 1100 ms (was 950); a jump 900 ms per sheet, 300 ms apart

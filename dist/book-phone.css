@@ -11,6 +11,11 @@
 .book-sheet.slide-top, .slide-header.slide-top { box-shadow: -14px 0 32px rgba(9, 24, 33, .16); clip-path: inset(0 0 0 -60px); }
 .book.is-sliding .book-sheet:not([hidden]), .book.is-sliding .slide-header { will-change: transform; }
 
+/* "Explore dashboard" / "View presentation" beside a live Tableau or Shiny
+   embed: a phone shows a screenshot instead of the live view, so it keeps the
+   link; wider screens have the live view and hide it (work-preview.js). */
+@media (min-width: 761px) { a.original-link.phone-only { display: none; } }   /* outranks .detail-gallery > .original-link */
+
 /* The menu: three lines at the top left, opening a directory of rooms over
    the top of the page (it overlays the page; the header's height never changes,
    so opening it moves nothing). Colours follow the header's page. */

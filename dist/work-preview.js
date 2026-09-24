@@ -22,6 +22,29 @@
     a.href = '#work';
     return a;
   };
+  // WebP copies of the pictures sit beside them under the same name (for the
+  // widest, also a 1000px copy — enough for a phone at 3x, or a 1000px column at
+  // 1x). A <picture> offers them first; the original JPEG/PNG stays the <img>
+  // src, for any browser without WebP. A third to a fifth of the bytes.
+  const WEBP = {
+    'exhibits/mediroute-presentation.jpg': [], 'exhibits/mediroute-event.jpg': [],
+    'exhibits/investment.png': [], 'exhibits/marketing.png': [],
+    'exhibits/carbon-sankey.jpg': [1000], 'exhibits/research-map.jpg': [1000],
+    'exhibits/satellite.jpg': [1000], 'exhibits/apple-country-user.png': [1000]
+  };
+  // Wraps img (not yet given a src) in a <picture> when WebP copies exist.
+  function withWebp(img, asset) {
+    const sizes = WEBP[asset.src];
+    if (!sizes) return img;
+    const base = asset.src.replace(/\.(jpe?g|png)$/i, '');
+    const source = document.createElement('source');
+    source.type = 'image/webp';
+    source.srcset = [...sizes.map(w => base + '-' + w + '.webp ' + w + 'w'), base + '.webp ' + asset.width + 'w'].join(', ');
+    source.sizes = '(max-width: 760px) 84vw, 1000px';
+    const picture = document.createElement('picture');
+    picture.append(source, img);
+    return picture;
+  }
   function artwork(asset, destination, eager = false) {
     const figure = node('figure', 'exhibit-figure');
     if (asset.type === 'video') {
@@ -49,8 +72,9 @@
     img.width = asset.width;
     img.height = asset.height;
     img.alt = asset.alt;
+    // Into its <picture> before it has a src, so only the chosen file loads.
+    link.append(withWebp(img, asset));
     img.src = asset.src;
-    link.append(img);
     if (!destination.startsWith('#')) { link.target = '_blank'; link.rel = 'noopener noreferrer'; }
     figure.append(link, node('figcaption', '', asset.caption));
     return figure;
@@ -131,8 +155,8 @@
       poster.width = asset.width;
       poster.height = asset.height;
       poster.alt = asset.alt;
+      stage.append(withWebp(poster, asset));
       poster.src = asset.src;
-      stage.append(poster);
       figure.append(stage, node('figcaption', '', asset.caption));
       return figure;
     }

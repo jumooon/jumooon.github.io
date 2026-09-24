@@ -52,6 +52,8 @@ body {
 /* Keep live pages below the live header even during a turn. The moving sheet
    is a separate body-level layer containing both header and page pixels. */
 .book-sheet[hidden], .book > [hidden] { display: none !important; }   /* the second form holds before book.js runs */
+/* <picture> only chooses a file (WebP first); layout belongs to its <img>. */
+picture { display: contents; }
 /* Case studies are a separate reading mode, outside the turning book. */
 body.work-detail-open .site-header { visibility: hidden; pointer-events: none; }
 body.work-detail-open #work.book-sheet { top: 0; }

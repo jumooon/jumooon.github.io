@@ -13,11 +13,11 @@
       type="image/svg+xml"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23173344'/%3E%3Cpath d='M8 8h5v5H8zm11 0h5v5h-5zM8 19h5v5H8zm11 0h5v5h-5z' fill='%23226b88'/%3E%3Cpath d='M13 10.5h6M10.5 13v6M21.5 13v6M13 21.5h6' stroke='%23226b88' stroke-width='1.5'/%3E%3C/svg%3E"
     />
-    <link rel="stylesheet" href="notebook.css?v=20260925-hidden" />
-    <link rel="stylesheet" href="book-phone.css?v=20260924-guide2" />
+    <link rel="stylesheet" href="notebook.css?v=20260925-webp" />
+    <link rel="stylesheet" href="book-phone.css?v=20260925-contact" />
     <link rel="stylesheet" href="work-exhibition.css?v=20260924-audit" />
     <script defer src="work-exhibits.js?v=20260924-sankey"></script>
-    <script defer src="work-preview.js?v=20260925-lazy"></script>
+    <script defer src="work-preview.js?v=20260925-webp"></script>
     <script defer src="content.js?v=20260924-mobile1"></script>
     <!-- Spotify's iFrame API is NOT loaded here: book.js fetches it only when
          someone first presses the music control, so a visitor who never asks for
@@ -36,7 +36,7 @@
     <script defer src="ocean.js?v=20260924-frame"></script>
     <script defer src="collection.js?v=20260924-bar2"></script>
     <script defer src="book-phone.js?v=20260925-riffle2"></script>
-    <script defer src="book.js?v=20260925-riffle4"></script>
+    <script defer src="book.js?v=20260925-webp"></script>
   </head>
   <body>
     <!-- The 3px rule is its own fixed element, above the page-turn layer. Drawn by
@@ -152,17 +152,24 @@
         <div class="shell">
           <p class="section-kicker" id="about-kicker"></p>
           <figure class="portrait-frame">
-            <img
-              class="about-portrait"
-              id="about-portrait"
-              src="jiung-moon-1400.jpg"
-              srcset="jiung-moon-700.jpg 700w, jiung-moon-1400.jpg 1400w, jiung-moon-2100.jpg 2100w, jiung-moon.jpg 2433w"
-              sizes="(max-width: 460px) 133vw, 700px"
-              alt=""
-              width="2433"
-              height="1825"
-              loading="lazy"
-            />
+            <picture>
+              <source
+                type="image/webp"
+                srcset="jiung-moon-700.webp 700w, jiung-moon-1400.webp 1400w, jiung-moon-2100.webp 2100w, jiung-moon.webp 2433w"
+                sizes="(max-width: 460px) 133vw, 700px"
+              />
+              <img
+                class="about-portrait"
+                id="about-portrait"
+                src="jiung-moon-1400.jpg"
+                srcset="jiung-moon-700.jpg 700w, jiung-moon-1400.jpg 1400w, jiung-moon-2100.jpg 2100w, jiung-moon.jpg 2433w"
+                sizes="(max-width: 460px) 133vw, 700px"
+                alt=""
+                width="2433"
+                height="1825"
+                loading="lazy"
+              />
+            </picture>
             <figcaption class="portrait-caption" id="portrait-caption"></figcaption>
           </figure>
           <div class="about-layout">
@@ -188,7 +195,7 @@
           <div class="collection-wall" tabindex="0" role="region" aria-label="Selected artworks — scroll horizontally">
             <div class="collection-track">
             <figure>
-              <img src="collection/kim-whanki.jpg" width="377" height="468" alt="Kim Whanki, 19-VI-71 #206: concentric blue dots above an emerald-toned band." loading="lazy" decoding="async">
+              <picture><source type="image/webp" srcset="collection/kim-whanki.webp"><img src="collection/kim-whanki.jpg" width="377" height="468" alt="Kim Whanki, 19-VI-71 #206: concentric blue dots above an emerald-toned band." loading="lazy" decoding="async"></picture>
               <figcaption><strong>Kim Whanki</strong><span>19-VI-71 #206</span><small>1971</small></figcaption>
             </figure>
             <figure>
@@ -196,7 +203,7 @@
               <figcaption><strong>Claude Monet</strong><span>Woman with a Parasol — Madame Monet and Her Son</span><small>1875</small></figcaption>
             </figure>
             <figure>
-              <img src="collection/seurat.jpg" width="1200" height="792" alt="Georges Seurat, Bathers at Asnières: figures resting beside the river." loading="lazy" decoding="async">
+              <picture><source type="image/webp" srcset="collection/seurat.webp"><img src="collection/seurat.jpg" width="1200" height="792" alt="Georges Seurat, Bathers at Asnières: figures resting beside the river." loading="lazy" decoding="async"></picture>
               <figcaption><strong>Georges Seurat</strong><span>Bathers at Asnières</span><small>1884</small></figcaption>
             </figure>
             </div>

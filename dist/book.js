@@ -303,7 +303,9 @@
   // inside every About snapshot (serialize + decode on each rasterization).
   // The srcset candidates of an <img>, as [{url, w}], smallest first.
   function srcsetOf(img) {
-    return (img.getAttribute('srcset') || '').split(',').map(part => part.trim().split(/\s+/))
+    // In a <picture> the files on offer are the WebP <source>'s.
+    const source = img.parentElement && img.parentElement.tagName === 'PICTURE' ? img.parentElement.querySelector('source[srcset]') : null;
+    return ((source || img).getAttribute('srcset') || '').split(',').map(part => part.trim().split(/\s+/))
       .filter(([url, d]) => url && /^\d+w$/.test(d || '')).map(([url, d]) => ({ url, w: parseInt(d, 10) }))
       .sort((a, b) => a.w - b.w);
   }
@@ -512,6 +514,8 @@
     headerClone.querySelector('.room-menu')?.setAttribute('hidden','');
     skyText.forEach(([n,v])=>headerClone.style.setProperty(n,v));
     const css = snapshotCss();
+    // A copied <picture> would pick its <source> file over the inlined picture.
+    clone.querySelectorAll('picture source').forEach(n=>n.remove());
     const promise = (async () => {
       await Promise.all([...clone.querySelectorAll('img')].map(async (img,i)=>{
         // The copy's own src goes first: a copy of a lazy picture that is not
@@ -642,6 +646,11 @@
     for (const index of order) {
       if(active || detailOpen() || document.hidden || generation!==warmGeneration) return;
       try {
+        // A phone leaves pictures on hidden pages unloaded. The neighbours' first
+        // screen is loaded and decoded here, while nothing is happening, so the
+        // first turn to them neither waits for a download nor decodes mid-turn.
+        if (sink && index !== current) await preparePageImages(index);
+        if (active || detailOpen() || document.hidden || generation!==warmGeneration) return;
         const image = await texture(index);
         if (active || detailOpen() || document.hidden || generation!==warmGeneration) return;
         (sink || renderer).cacheImage(image);

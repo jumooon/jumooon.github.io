@@ -1,5 +1,27 @@
 # Portfolio page-turn handoff — 2026-09-16
 
+## 2026-09-25 — WebP pictures, neighbour images, Contact on phones
+
+- WebP copies beside the originals (same name, .webp; for the widest Work
+  pictures also a -1000.webp): Work exhibits, the About portrait (all four
+  sizes), Kim Whanki and Seurat. Monet stays JPEG (its WebP was larger).
+  Made with Pillow, method 6: photos q82, charts q90 or lossless, whichever
+  was smaller; compared at 100% crop with the originals. Offered through
+  <picture><source type="image/webp"> with the original as <img src>, so a
+  browser without WebP still gets a picture. `picture { display: contents }`
+  keeps layout on the <img> (About/Collection screenshots identical before and
+  after). texture() drops <source> from its copy (it would win over the
+  inlined picture); srcsetOf() reads the <source>'s srcset.
+  Work page pictures on a phone: 2601 KB -> 481 KB. Desktop total: 4738 KB
+  -> 2722 KB. work-preview.js WEBP map lists which files have copies.
+- Phones: warm() loads and decodes the neighbours' first-screen pictures
+  (preparePageImages) before snapshotting them, so the first turn to a page
+  does not wait on its downloads.
+- Contact on phones: the same parts in the same order as the desktop (times,
+  links, note), stacked in one column; desktop unchanged.
+- tests/assets.test.cjs: every local file the site names (index.html src,
+  srcset, href; the exhibit manifest; the WebP map) exists with exact case.
+
 ## 2026-09-25 — Load weight, snapshot cost, phone riffle
 
 - Startup bytes on a phone (390x844, measured in headless Chromium): 4.73 MB

@@ -67,6 +67,10 @@
   .room-guide[data-page="contact"] { --guide-light: rgba(233, 238, 241, .16); background: rgba(20, 55, 72, .96); border-top-color: #416371; color: #dfe4e3; }
   .room-guide[data-page="contact"] .room-count { color: #8fabb9; }
   body.work-detail-open .room-guide { display: none; }
+  /* Contact: the same parts in the same order as the desktop — times, links,
+     note — stacked instead of side by side. Side by side at phone width the
+     links had a 97 px column and sat out of line with the times. */
+  .footer-grid { grid-template-columns: minmax(0, 1fr); gap: 44px; align-items: start; }
   /* Keep the guide's height clear at the end of each page. */
   .work, .method, .about { padding-bottom: calc(54px + var(--guide-h)); }
   .art-collection { padding-bottom: calc(clamp(20px, 4vh, 48px) + var(--guide-h)); }

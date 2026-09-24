@@ -1,0 +1,364 @@
+{
+  "meta": {
+    "title": "Jiung Moon — Data Analyst",
+    "description": "Jiung Moon turns business questions into structured analysis and clear answers."
+  },
+  "nav": {
+    "brand": {
+      "label": "Home",
+      "href": "#hero"
+    },
+    "links": [
+      {
+        "label": "Work",
+        "href": "#work"
+      },
+      {
+        "label": "Method",
+        "href": "#method"
+      },
+      {
+        "label": "About",
+        "href": "#about"
+      },
+      {
+        "label": "Collection",
+        "href": "#collection"
+      },
+      {
+        "label": "Contact",
+        "href": "#contact"
+      }
+    ]
+  },
+  "hero": {
+    "name": "Jiung Moon",
+    "copyLines": [
+      "Data analyst"
+    ],
+    "places": [
+      {
+        "id": "busan",
+        "label": "Busan"
+      },
+      {
+        "id": "sandiego",
+        "label": "San Diego"
+      }
+    ]
+  },
+  "music": {
+    "provider": "spotify",
+    "tracks": {
+      "day": {
+        "title": "After All This Time — VIGI",
+        "disabledUri": "spotify:track:5WN9wAj9Bn8Rf8i4cesLmJ"
+      },
+      "sunset": {
+        "title": "Mystery of Love — Sufjan Stevens",
+        "disabledUri": "spotify:track:0MNNKSUU9OOQ8DSGWduw79"
+      },
+      "night": {
+        "title": "Apocalypse — Cigarettes After Sex",
+        "disabledUri": "spotify:track:3AVrVz5rK8Hrqo9YGiVGN5"
+      }
+    }
+  },
+  "work": {
+    "kicker": "01 / Work / 2025–2026",
+    "title": "Experience & Projects",
+    "intro": "Investment research, environmental reporting, and product analysis. The questions, my contributions, and the results.",
+    "groups": [
+      {
+        "id": "experience",
+        "title": "Experience",
+        "description": "Work within organizations and research teams.",
+        "cases": [
+          {
+            "id": "investment",
+            "title": "Multi-Factor Investment Model",
+            "org": "Aperiohub Advisory",
+            "role": "Data Analyst Intern",
+            "period": "Jul–Aug 2026",
+            "summary": "Ranked technology companies and evaluated a portfolio using growth, quality, valuation, and sentiment data.",
+            "highlight": "+7.1%",
+            "highlightLabel": "Simulated return · Aug 21–Sep 22, 2026",
+            "tags": [
+              "Python",
+              "FinBERT",
+              "Tableau"
+            ],
+            "sections": {
+              "context": "Our investment team was tasked with building a portfolio supported by a defensible stock-selection process.",
+              "challenge": "Compare companies on a consistent basis and test the investment logic against historical data before applying it to a portfolio.",
+              "contribution": "I built a multi-factor model for S&P 500 technology companies, standardized the factors with Z-scores, and automated daily screening with Python and yfinance. I added FinBERT analysis of 10-K risk factors and earnings transcripts, and brought rankings, sentiment, and performance into a Tableau dashboard.",
+              "outcome": "The Z-score-weighted simulated $50M portfolio was evaluated at approximately $53.55M on September 22, 2026: a 7.1% price return since August 21. This follow-up period is separate from the internship result reported on my résumé: 1.28%, or 31 basis points above the S&P 500. The follow-up calculation uses closing prices and chart-estimated weights, excluding dividends, fees, and taxes.",
+              "reflection": "When a teammate completed industry analysis faster than I could, I entrusted that work to them and focused on the model and overall investment logic. It changed how I shared responsibility within the team."
+            }
+          },
+          {
+            "id": "environment",
+            "title": "Financial Data & Carbon Reporting",
+            "org": "Associated Students · UC San Diego",
+            "role": "Data Analyst 1",
+            "period": "Dec 2025–Jun 2026",
+            "summary": "Built the data foundation for estimating departmental carbon emissions from financial expenditure.",
+            "highlight": "17,776",
+            "highlightLabel": "Financial datasets structured",
+            "tags": [
+              "SQL",
+              "Python",
+              "Supabase",
+              "Shiny"
+            ],
+            "sections": {
+              "context": "Associated Students used financial data to examine departmental carbon expenditure and inform budget allocation.",
+              "challenge": "Create a reliable analysis base by resolving duplicate data and misclassification, then make recurring processing more efficient.",
+              "contribution": "I designed normalized SQL schemas and automated ETL with Python and Supabase. I used the Claude API in the classification-cleanup workflow, parallelized API requests, and built a Shiny dashboard to make departmental spending and carbon patterns accessible.",
+              "outcome": "The work achieved 99.1% data integrity, improved processing efficiency by 82.7%, and made API requests 3× faster. The resulting carbon-expenditure analysis informed departmental budget discussions.",
+              "reflection": "The financial data became useful beyond accounting: it provided a way to examine environmental costs alongside spending. Data quality and the decision the analysis supported were closely connected."
+            }
+          },
+          {
+            "id": "research",
+            "title": "Satellite Data for Poverty Research",
+            "org": "Department of Economics · UC San Diego",
+            "role": "Economic Research Assistant",
+            "period": "Jan–Jun 2026",
+            "summary": "Prepared satellite imagery, grid labels, and population estimates for research on poverty in Indonesia.",
+            "highlight": "GIS",
+            "highlightLabel": "Ground-truth data for prediction",
+            "tags": [
+              "GIS",
+              "Satellite imagery",
+              "Statistical sampling"
+            ],
+            "sections": {
+              "context": "The research examined how satellite imagery could support the identification of informal settlements and poverty-related patterns in Indonesia.",
+              "challenge": "Turn raw imagery into consistent spatial labels and population estimates that could support model development.",
+              "contribution": "I extracted high-resolution imagery, defined areas of interest, and labeled grid-level visual data in GIS. I used statistical sampling to estimate populations within grids and prepared ground-truth features for the research team's prediction models.",
+              "outcome": "Delivered labeled spatial data and population estimates for developing poverty-prediction models. My contribution centered on data preparation and ground truth; no predictive-accuracy result is claimed here.",
+              "reflection": "A useful distinction in this work is between preparing reliable model inputs and demonstrating predictive performance. The labels and sampling work support the latter, but do not establish it on their own."
+            }
+          }
+        ]
+      },
+      {
+        "id": "projects",
+        "title": "Projects",
+        "description": "Models, tools, and product work.",
+        "cases": [
+          {
+            "id": "apple-warranty",
+            "title": "Apple Warranty Forecasting",
+            "org": "Analytics project",
+            "role": "Warranty & demand analysis",
+            "period": "Jun–Jul 2025",
+            "summary": "Analyzed warranty claims to locate demand hotspots and inform refurbishment inventory planning.",
+            "highlight": "60%",
+            "highlightLabel": "Global demand concentrated in 10 stores",
+            "tags": [
+              "Excel",
+              "PostgreSQL",
+              "Python",
+              "Tableau"
+            ],
+            "sections": {
+              "context": "The project examined global warranty-claim patterns and the refurbishment demand associated with stores and product lifecycles.",
+              "challenge": "Identify where demand was concentrated and account for both short-term surges and longer-term inventory needs.",
+              "contribution": "I analyzed store-level and lifecycle patterns, developed a refurbishment-demand forecast, and built a drill-down Tableau dashboard to support inventory pre-stocking decisions.",
+              "outcome": "Quantified more than 3,000 refurbishment units and found that the top 10 stores accounted for 60% of global demand in the analyzed data. The dashboard supported targeted inventory planning; a realized reduction in wait times was not measured.",
+              "reflection": "Demand concentration makes store-level planning useful. A forecast's operational value would need to be assessed through inventory availability and customer wait times after implementation."
+            }
+          },
+          {
+            "id": "marketing",
+            "title": "Marketing Mix Modeling",
+            "org": "Analytics project",
+            "role": "Budget allocation analysis",
+            "period": "Mar 2026",
+            "summary": "Modeled channel response to evaluate how a fixed marketing budget could be reallocated.",
+            "highlight": "+153%",
+            "highlightLabel": "Simulated efficiency gain",
+            "tags": [
+              "Python",
+              "Pandas",
+              "NumPy",
+              "OLS",
+              "Matplotlib",
+              "Seaborn"
+            ],
+            "sections": {
+              "context": "The project examined the relationship between marketing-channel spending and business KPIs.",
+              "challenge": "Compare channel returns while accounting for saturation and diminishing returns to additional spending.",
+              "contribution": "I used OLS analysis to estimate channel elasticity and attribution, built a ROAS framework, and examined low-return segments for signs of ad fatigue. I then simulated a budget shift toward channels with greater growth potential.",
+              "outcome": "Reallocating 30% of underperforming budget produced a modeled 153% efficiency gain. This is a simulation result, rather than a measured campaign lift.",
+              "reflection": "The model provides a budget-allocation hypothesis. A controlled campaign test would be needed to determine whether the estimated improvement translates into incremental results."
+            }
+          },
+          {
+            "id": "email",
+            "title": "Email Auto Generator",
+            "org": "Team project",
+            "role": "Team Lead · 5 members",
+            "period": "Sep–Dec 2025",
+            "summary": "Built an AI-powered Gmail add-on to assist email workflows.",
+            "highlight": "−35%",
+            "highlightLabel": "Average response latency",
+            "tags": [
+              "JavaScript",
+              "Google Apps Script",
+              "Vertex AI",
+              "A/B testing"
+            ],
+            "sections": {
+              "context": "A five-person team developed a Gmail add-on for working with unstructured email content.",
+              "challenge": "Build a usable generation workflow while improving response quality and limiting wait times.",
+              "contribution": "I led the team and developed the backend with Google Apps Script and Vertex AI. I used A/B tests on prompt structures and parameters, and optimized the processing workflow.",
+              "outcome": "Reduced average response latency by 35% while iterating on generation quality through prompt testing.",
+              "reflection": "Latency and output quality need to be assessed together: a faster response is useful only when the generated email still serves the user's intent."
+            }
+          },
+          {
+            "id": "mediroute",
+            "title": "MediRoute",
+            "org": "MIT AI Hackathon",
+            "role": "Team Lead · Market analysis & strategy",
+            "period": "Jun 2025",
+            "summary": "Developed the market and revenue case for an AI-driven healthcare-routing concept.",
+            "highlight": "6th",
+            "highlightLabel": "Team placement · MIT AI Hackathon",
+            "tags": [
+              "Market analysis",
+              "TAM / SAM / SOM",
+              "Revenue modeling"
+            ],
+            "sections": {
+              "context": "Our hackathon team developed MediRoute, an AI-driven healthcare-routing concept.",
+              "challenge": "Translate hospital-logistics data and market research into a credible commercial case for a venture-style pitch.",
+              "contribution": "I led the team, conducted global TAM/SAM/SOM analysis, and developed a data-informed revenue model using hospital-logistics data.",
+              "outcome": "The team placed sixth at the MIT AI Hackathon. My contribution focused on market sizing, commercial strategy, and the revenue model.",
+              "reflection": "Market size and revenue assumptions explain the opportunity; validation with hospitals would be needed to establish adoption and operational value."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "method": {
+    "kicker": "02 / Method",
+    "title": "How I work",
+    "intro": "I start with the decision we need to support. Economics and industry knowledge help me form hypotheses; data helps me test them.",
+    "reasoningMap": {
+      "ariaLabel": "Illustrative revenue question, decomposed into a framework and analyzed to reach an answer",
+      "signalLabel": [
+        "Working note / 001",
+        "Illustrative example"
+      ],
+      "question": {
+        "kicker": "01 / Business question",
+        "text": "Why did revenue change?"
+      },
+      "branches": [
+        {
+          "label": "Customers",
+          "text": "How many bought?"
+        },
+        {
+          "label": "Frequency",
+          "text": "How often?"
+        },
+        {
+          "label": "Order value",
+          "text": "How much per order?"
+        }
+      ],
+      "mapCaption": "Break the question into measurable parts.",
+      "framework": {
+        "kicker": "03 / Analytical framework",
+        "text": "Revenue = customers × orders per customer × revenue per order"
+      },
+      "analysis": {
+        "kicker": "04 / Data & analysis",
+        "text": "Customer and transaction data",
+        "note": "Check anomalies · Compare periods · Test alternative explanations"
+      },
+      "output": {
+        "kicker": "05 / Answer & decision",
+        "lines": [
+          "Explain the driver.",
+          "State what remains uncertain.",
+          "Make the options clear."
+        ]
+      }
+    },
+    "principles": [
+      {
+        "number": "01",
+        "title": "Define the outcome",
+        "text": "Clarify the expected result, then break the question into smaller parts. When the starting point is a dataset, look for anomalies that suggest a question."
+      },
+      {
+        "number": "02",
+        "title": "Build a hypothesis",
+        "text": "Consider both company-level drivers and the wider economic context. Map the explanation to measurable variables and check the assumptions behind each metric."
+      },
+      {
+        "number": "03",
+        "title": "Test the logic",
+        "text": "Check data quality and alternative explanations. Where relevant, test the same logic on historical data before applying it to a new period."
+      },
+      {
+        "number": "04",
+        "title": "Explain the evidence",
+        "text": "Present the result in plain language, with its limits. Where the evidence supports it, quantify uncertainty and compare options so the decision-maker can choose."
+      }
+    ]
+  },
+  "about": {
+    "kicker": "03 / Background",
+    "portrait": {
+      "src": "jiung-moon-1400.jpg",
+      "srcset": "jiung-moon-700.jpg 700w, jiung-moon-1400.jpg 1400w, jiung-moon-2100.jpg 2100w, jiung-moon.jpg 2433w",
+      "sizes": "(max-width: 460px) 133vw, 700px",
+      "alt": "Jiung Moon in graduation attire at UC San Diego",
+      "width": 2433,
+      "height": 1825,
+      "caption": "Jiung Moon — San Diego, 2026"
+    },
+    "headingLines": [
+      "Born in Busan.",
+      "Studied in San Diego."
+    ],
+    "details": [
+      "I'm studying Business Economics at UC San Diego, with a minor in Business Analytics. Econometrics was the part of economics I enjoyed most: it gave me a practical way to test an explanation.",
+      "Business Analytics connected that foundation to applied analysis. Through my work and projects, I've used SQL, Python, and dashboards to investigate business questions and explain the results.",
+      "Outside work, I enjoy hiking, exercise, and finding new perspectives in books and films."
+    ],
+    "education": {
+      "school": "University of California, San Diego",
+      "degree": "B.S. Business Economics · Minor in Business Analytics",
+      "years": "Class of 2026"
+    }
+  },
+  "contact": {
+    "links": [
+      {
+        "label": "Email",
+        "href": "mailto:jay870012@gmail.com"
+      },
+      {
+        "label": "LinkedIn",
+        "href": "https://www.linkedin.com/in/jiungmoon/"
+      },
+      {
+        "label": "GitHub",
+        "href": "https://github.com/jumooon"
+      }
+    ],
+    "footerNote": [
+      "Jiung Moon / Data analyst",
+      "Busan — San Diego"
+    ]
+  }
+}

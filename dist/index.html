@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Jiung Moon turns business questions into structured analysis and clear answers."
+    />
+    <title>Jiung Moon — Data Analyst</title>
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23173344'/%3E%3Cpath d='M8 8h5v5H8zm11 0h5v5h-5zM8 19h5v5H8zm11 0h5v5h-5z' fill='%23226b88'/%3E%3Cpath d='M13 10.5h6M10.5 13v6M21.5 13v6M13 21.5h6' stroke='%23226b88' stroke-width='1.5'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="notebook.css?v=20260924-arrows3" />
+    <link rel="stylesheet" href="work-exhibition.css?v=20260924-audit" />
+    <script defer src="work-exhibits.js?v=20260924-sankey"></script>
+    <script defer src="work-preview.js?v=20260924-history2"></script>
+    <script defer src="content.js?v=20260924-smooth2"></script>
+    <!-- Spotify's iFrame API is NOT loaded here: book.js fetches it only when
+         someone first presses the music control, so a visitor who never asks for
+         music never contacts Spotify. The ready callback is parked here because
+         the script, once injected, can become ready at any time. -->
+    <script>
+      window.onSpotifyIframeApiReady = function (api) {
+        window.spotifyIframeApi = api;
+        if (window.onSpotifyApiCollected) window.onSpotifyApiCollected(api);
+      };
+    </script>
+    <script defer src="astronomy.browser.min.js"></script>
+    <script defer src="sun-times.js?v=20260918-data"></script>
+    <script defer src="contact-sun.js?v=20260924-contact-sun"></script>
+    <script defer src="stars.js"></script>
+    <script defer src="ocean.js?v=20260924-arrows"></script>
+    <script defer src="collection.js?v=20260924-bar2"></script>
+    <script defer src="book.js?v=20260924-arrows2"></script>
+  </head>
+  <body>
+    <!-- The 3px rule is its own fixed element, above the page-turn layer. Drawn by
+         the header it became part of each rasterised sheet and blurred for the whole
+         turn (measured 88,88,88 live against 138,151,163 in the raster), which read
+         as the top strip popping. It is identical on every page, so nothing is lost
+         by keeping it out of the snapshots. -->
+    <div class="top-rule" aria-hidden="true"></div>
+    <header class="site-header">
+      <nav class="nav shell" aria-label="Primary navigation">
+        <a class="brand" id="nav-brand" href="#hero"></a>
+        <!-- Nav links generated from content.json (nav.links). content.js sets
+             each href to #<page id>; book.js intercepts clicks on these to
+             turn to that page instead of jumping. -->
+        <div class="nav-links" id="nav-links"></div>
+      </nav>
+    </header>
+
+    <!-- Five independently scrollable sections. book.js turns a curved,
+         two-sided sheet between any pair of sections on navigation. -->
+    <div class="book" id="book">
+      <section class="hero" id="hero" aria-labelledby="hero-title">
+        <div class="hero-introduction">
+          <h1 id="hero-title"></h1>
+          <p class="hero-copy" id="hero-copy"></p>
+          <!-- The two cities. content.js renders a button per content.json hero.places
+               entry; book.js forwards clicks to ocean.js, which draws that city's real sky.
+               Hover or focus shows the city's local time and, beneath, Sun/view/phase. -->
+          <p class="hero-place" id="hero-place" role="group" aria-label="The sky right now over two cities"></p>
+          <!-- Music. The control sits directly above its card so the two read as one
+               thing; one track per phase of the sky (content.json music.tracks), swapped
+               when the phase or the city changes. The card stays collapsed until pressed,
+               and book.js only fetches Spotify's API and builds the player on that first
+               press, so a visitor who never asks for music never contacts Spotify.
+               Spotify's terms forbid altering or obscuring the player, so once open the
+               card is shown exactly as Spotify renders it. -->
+          <div class="player" id="player">
+            <button class="player-button" id="player-toggle" type="button" aria-expanded="false" aria-pressed="false" aria-label="Music (no track yet)" disabled>
+              <svg class="player-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10-6.5z"/></svg>
+              <svg class="player-stop" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>
+              <span class="player-bars" aria-hidden="true"><i></i><i></i><i></i></span>
+            </button>
+          </div>
+          <div class="hero-music" id="hero-music" hidden>
+            <div id="spotify-embed"></div>
+          </div>
+        </div>
+
+        <div class="ocean-scene">
+          <img
+            class="ocean-art"
+            src="pacific-horizon-2560.jpg"
+            srcset="
+              pacific-horizon-640.jpg   640w,
+              pacific-horizon-960.jpg   960w,
+              pacific-horizon-1280.jpg 1280w,
+              pacific-horizon-1920.jpg 1920w,
+              pacific-horizon-2560.jpg 2560w,
+              pacific-horizon-3840.jpg 3840w,
+              pacific-horizon-5120.jpg 5120w,
+              pacific-horizon-7680.jpg 7680w
+            "
+            sizes="(min-width: 3840px) 3840px, 100vw"
+            alt=""
+            width="7680"
+            height="2560"
+            fetchpriority="high"
+          />
+        </div>
+      </section>
+
+      <section class="work" id="work" aria-labelledby="work-title">
+        <div class="shell">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker" id="work-kicker"></p>
+              <h2 id="work-title"></h2>
+            </div>
+            <p class="section-intro" id="work-intro"></p>
+          </div>
+
+          <!-- Experience and Projects, including their index and five-part
+               narratives, are generated from content.json (work.groups). -->
+          <div class="case-list" id="case-list"></div>
+        </div>
+      </section>
+
+      <section class="method" id="method" aria-labelledby="method-title">
+        <div class="shell">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker" id="method-kicker"></p>
+              <h2 id="method-title"></h2>
+            </div>
+            <p class="section-intro" id="method-intro"></p>
+          </div>
+          <div class="reasoning-map">
+            <div class="signal-label"><span id="rm-signal-1"></span><span id="rm-signal-2"></span></div>
+            <div class="question-node"><small id="rm-q-kicker"></small><strong id="rm-q-text"></strong></div>
+            <div class="branch-line" aria-hidden="true"></div>
+            <div class="question-branches" id="rm-branches"></div>
+            <p class="map-caption" id="rm-caption"></p>
+            <div class="framework-node"><small id="rm-fw-kicker"></small><p id="rm-fw-text"></p></div>
+            <div class="analysis-node"><small id="rm-an-kicker"></small><p id="rm-an-text"></p><span id="rm-an-note"></span></div>
+            <div class="signal-output"><span id="rm-out-kicker"></span><strong id="rm-out-text"></strong></div>
+          </div>
+          <!-- Method principles are generated from content.json (method.principles). -->
+          <div class="method-grid" id="method-grid"></div>
+        </div>
+      </section>
+
+      <section class="about" id="about" aria-labelledby="about-title">
+        <div class="shell">
+          <p class="section-kicker" id="about-kicker"></p>
+          <figure class="portrait-frame">
+            <img
+              class="about-portrait"
+              id="about-portrait"
+              src="jiung-moon-1400.jpg"
+              srcset="jiung-moon-700.jpg 700w, jiung-moon-1400.jpg 1400w, jiung-moon-2100.jpg 2100w, jiung-moon.jpg 2433w"
+              sizes="(max-width: 460px) 133vw, 700px"
+              alt=""
+              width="2433"
+              height="1825"
+              loading="lazy"
+            />
+            <figcaption class="portrait-caption" id="portrait-caption"></figcaption>
+          </figure>
+          <div class="about-layout">
+            <h2 class="about-copy" id="about-title"></h2>
+            <div>
+              <!-- Paragraphs generated from content.json (about.details). -->
+              <div id="about-details"></div>
+              <div class="education">
+                <div><strong id="edu-school"></strong><span id="edu-degree"></span></div>
+                <span id="edu-years"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="art-collection" id="collection" aria-labelledby="collection-title">
+        <div class="shell collection-room">
+          <header class="collection-heading">
+            <p class="section-kicker">04 / Selected artworks</p>
+            <h2 id="collection-title">Collection</h2>
+          </header>
+          <div class="collection-wall" tabindex="0" role="region" aria-label="Selected artworks — scroll horizontally">
+            <div class="collection-track">
+            <figure>
+              <img src="collection/kim-whanki.jpg" width="377" height="468" alt="Kim Whanki, 19-VI-71 #206: concentric blue dots above an emerald-toned band." loading="lazy" decoding="async">
+              <figcaption><strong>Kim Whanki</strong><span>19-VI-71 #206</span><small>1971</small></figcaption>
+            </figure>
+            <figure>
+              <img src="collection/monet.jpg" width="675" height="1200" alt="Claude Monet, Woman with a Parasol — Madame Monet and Her Son." loading="lazy" decoding="async">
+              <figcaption><strong>Claude Monet</strong><span>Woman with a Parasol — Madame Monet and Her Son</span><small>1875</small></figcaption>
+            </figure>
+            <figure>
+              <img src="collection/seurat.jpg" width="1200" height="792" alt="Georges Seurat, Bathers at Asnières: figures resting beside the river." loading="lazy" decoding="async">
+              <figcaption><strong>Georges Seurat</strong><span>Bathers at Asnières</span><small>1884</small></figcaption>
+            </figure>
+            </div>
+          </div>
+          <div class="collection-bar" aria-hidden="true"><span class="collection-thumb"></span></div>
+        </div>
+      </section>
+
+      <footer id="contact">
+        <div class="shell">
+          <div class="footer-grid">
+            <!-- Today's sunrise and sunset for the two cities, drawn by
+                 contact-sun.js from the data sun-times.js publishes. Four numerals
+                 at rest: the columns are the cities in the same order the hero
+                 buttons and the footer note below use, the rows are sunrise then
+                 sunset, and pointing at a numeral fades in the two words that
+                 name it. -->
+            <div id="contact-sun"></div>
+            <!-- Contact links generated from content.json (contact.links). -->
+            <div class="contact-links" id="contact-links"></div>
+          </div>
+          <div class="footer-note" id="footer-note"></div>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

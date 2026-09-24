@@ -1,0 +1,5 @@
+# Kept on this machine only
+_unused/
+.openai/
+.DS_Store
+node_modules/

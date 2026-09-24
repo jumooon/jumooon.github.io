@@ -1,0 +1,148 @@
+/* Scoped exhibition styles: no changes to the other book sheets. */
+@scope (.work-exhibition) {
+.reading-preview { display: block; height: auto; overflow: auto; }
+.reading-preview .site-header { position: relative; }
+.preview-main { padding-top: 64px; padding-bottom: 36px; }
+.preview-main h1 { margin: 0; font-size: clamp(2rem, 4vw, 3.1rem); font-weight: 400; letter-spacing: -.045em; line-height: 1.18; }
+.preview-main [hidden] { display: none !important; }
+.collection-group { margin-top: 52px; }
+.collection-label { display: flex; align-items: baseline; gap: 14px; margin: 0 0 18px; font-size: 1rem; font-weight: 400; }
+.collection-label span { color: var(--muted); font-size: .75rem; }
+.collection-row { display: grid; grid-template-columns: minmax(0, 1fr) 165px 18px; gap: 32px; padding: 26px 0; border-top: 1px solid var(--line); color: inherit; text-decoration: none; }
+.collection-row:last-child { border-bottom: 1px solid var(--line); }
+.row-meta { margin: 0 0 8px; color: var(--muted); font-size: .8125rem; line-height: 1.6; }
+.row-title { margin: 0 0 9px; font-size: 1.4rem; line-height: 1.3; font-weight: 400; letter-spacing: -.025em; }
+.row-summary { margin: 0; max-width: 590px; font-size: 1rem; line-height: 1.65; color: var(--muted); }
+.row-result { align-self: center; }
+.row-result strong { display: block; font-size: 1.9rem; font-weight: 400; line-height: 1.2; color: var(--signal); letter-spacing: -.04em; }
+.row-result span { display: block; margin-top: 7px; font-size: .8125rem; line-height: 1.5; color: var(--muted); }
+.row-open { align-self: center; color: var(--muted); font-size: 1.3rem; }
+.collection-row:hover .row-title, .collection-row:focus-visible .row-title { color: var(--signal); text-decoration: underline; text-underline-offset: 5px; text-decoration-thickness: 1px; }
+.detail-back { display: inline-block; padding: 10px 0; margin-bottom: 32px; color: var(--muted); font-size: .875rem; text-underline-offset: 4px; }
+.detail-heading { max-width: 800px; }
+.detail-heading:focus { outline: none; }
+.detail-meta { margin: 0 0 16px; font-size: .875rem; color: var(--muted); }
+.detail-summary { max-width: 660px; margin: 20px 0 0; color: var(--muted); line-height: 1.75; }
+.detail-result { display: flex; align-items: baseline; flex-wrap: wrap; gap: 12px 24px; border-block: 1px solid var(--line); margin: 32px 0 40px; padding: 24px 0; }
+.detail-result strong { color: var(--signal); font-size: 2.7rem; font-weight: 400; letter-spacing: -.045em; line-height: 1.2; }
+.detail-result span { color: var(--muted); font-size: .875rem; }
+.detail-body { max-width: 760px; margin-left: auto; }
+.detail-context { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 36px; padding-bottom: 36px; border-bottom: 1px solid var(--line); }
+.reading-section { margin: 0 0 36px; }
+.detail-context .reading-section { margin: 0; }
+.reading-section h2 { font-size: .875rem; font-weight: 400; color: var(--signal-dark); letter-spacing: 0; margin: 0 0 12px; }
+.reading-section p, .reading-section li { font-size: 1rem; line-height: 1.8; }
+.reading-section p { margin: 0; }
+.reading-section ul { padding-left: 20px; margin: 0; }
+.reading-section li + li { margin-top: 12px; }
+.detail-contribution { margin-top: 36px; }
+.detail-reflection { color: var(--muted); border-top: 1px solid var(--line); padding-top: 24px; }
+.detail-tools { color: var(--muted); font-size: .875rem; line-height: 1.8; }
+.preview-note { display: block; min-height: 0; background: none; color: var(--muted); border-top: 1px solid var(--line); padding: 24px 0 0; margin-top: 60px; font-size: .8125rem; }
+.load-note { margin-top: 40px; color: var(--muted); }
+/* Quiet exhibition walls; the original work supplies the color. */
+.preview-main { max-width: 1160px; }
+.collection-group { margin-top: 64px; }
+.collection-label { border-top: 1px solid var(--line); padding-top: 18px; margin-bottom: 40px; }
+.exhibit { margin: 0 0 112px; min-width: 0; scroll-margin-top: 32px; }
+.exhibit:focus { outline: none; }
+.exhibit:focus-visible > .exhibit-label { outline: 2px solid var(--signal); outline-offset: 8px; }
+.exhibit-environment { max-width: 980px; margin-left: auto; }
+.exhibit-marketing { max-width: 940px; margin-inline: auto; }
+.work-index { margin-top: 28px; }
+.work-index-toggle { display: flex; align-items: center; gap: 12px; width: fit-content; padding: 8px 0; cursor: pointer; list-style: none; font-size: .875rem; color: var(--ink); }
+.work-index-toggle::-webkit-details-marker { display: none; }
+.work-index-toggle::after { content: '+'; margin-left: 8px; font-size: 1.1rem; }
+.work-index[open] > .work-index-toggle::after { content: '−'; }
+.work-index-count { color: var(--muted); font-size: .8125rem; }
+.work-index-toggle:focus-visible { outline: 2px solid var(--signal); outline-offset: 4px; }
+.work-contents { margin-top: 16px; font-size: .875rem; line-height: 1.6; }
+.work-contents-group { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 20px; align-items: baseline; }
+.work-contents-group + .work-contents-group { margin-top: 10px; }
+.work-contents-label { color: var(--muted); }
+.work-contents-list { display: flex; flex-wrap: wrap; gap: 4px 22px; list-style: none; padding: 0; margin: 0; }
+.work-contents a { display: inline-block; padding-block: 5px; color: var(--ink); text-decoration: none; }
+.work-contents a:hover { text-decoration: underline; text-underline-offset: 4px; }
+.work-contents a:focus-visible { outline: 2px solid var(--signal); outline-offset: 4px; }
+.exhibit-figure { margin: 0; }
+.exhibit-video { display: block; width: 100%; max-height: 680px; background: #101820; object-fit: contain; }
+.exhibit-image-link { display: block; padding: clamp(16px, 3vw, 40px); background: #f0f3f4; }
+.exhibit-image { display: block; width: 100%; height: auto; max-height: 620px; object-fit: contain; }
+.exhibit-figure figcaption { margin-top: 12px; font-size: .8125rem; line-height: 1.6; color: var(--muted); }
+.exhibit-label { margin-bottom: 24px; }
+.exhibit-caption { margin-top: 22px; }
+.exhibit-copy { max-width: 720px; }
+.exhibit-label .row-title { font-size: clamp(1.35rem, 2.3vw, 1.85rem); }
+.exhibit-label a { color: inherit; text-decoration: none; }
+.exhibit-role { margin: 12px 0 0; font-size: .875rem; color: var(--muted); }
+.exhibit-actions { display: flex; flex-wrap: wrap; gap: 12px 26px; margin-top: 20px; }
+.exhibit-actions a, .original-link { color: var(--ink); font-size: .875rem; line-height: 1.6; text-decoration-thickness: 1px; text-underline-offset: 5px; }
+.exhibit-image-link:focus-visible, .exhibit-caption a:focus-visible { outline: 2px solid var(--signal); outline-offset: 6px; }
+.exhibit-environment .exhibit-image-link { background: #f0f2ef; }
+.exhibit-research .exhibit-image-link { padding: 0; background: none; }
+.exhibit-research .exhibit-image { max-height: 680px; object-fit: contain; background: #f0f3f4; }
+.exhibit-marketing .exhibit-image-link { background: #f5f6f6; padding: clamp(20px, 4vw, 48px); }
+.detail-gallery { margin-top: 40px; }
+.detail-gallery > .original-link { display: inline-block; margin-top: 16px; }
+.detail-gallery .exhibit-image { max-height: none; }
+.detail-gallery .exhibit-figure + .exhibit-figure,
+.detail-gallery > .exhibit-figure:last-child:not(:first-child) { margin-top: 48px; }
+.artifact-note { color: var(--muted); font-size: .875rem; line-height: 1.7; max-width: 720px; }
+.exhibit-mediroute { max-width: 960px; margin-inline: auto; }
+.exhibit-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.exhibit-pair .exhibit-image-link { padding: 12px; }
+.exhibit-pair .exhibit-image { aspect-ratio: 3 / 2; object-fit: contain; }
+.detail-gallery .exhibit-pair .exhibit-figure { margin: 0; }
+@media(max-width: 600px) {
+  .exhibit-pair { grid-template-columns: minmax(0, 1fr); gap: 24px; max-width: 480px; margin-inline: auto; }
+}
+.exhibit-mediroute .exhibit-image { max-width: 590px; margin-inline: auto; }
+.exhibit-email .exhibit-image-link { padding: clamp(12px, 2vw, 28px); }
+.detail-gallery img[src$="mediroute-presentation.jpg"] { max-width: 590px; margin-inline: auto; }
+@media(max-width: 760px) {
+  .exhibit { margin-bottom: 72px; }
+  .collection-label { margin-bottom: 28px; }
+  .work-contents-group { grid-template-columns: 1fr; gap: 4px; }
+  .exhibit-image-link { padding: 14px; }
+  .exhibit-actions a { padding-block: 8px; }
+}
+@media(max-width: 760px) {
+  .preview-main { padding-top: 36px; }
+  .collection-row { grid-template-columns: minmax(0, 1fr) 110px; gap: 20px; }
+  .row-open { display: none; }
+  .row-title { font-size: 1.2rem; }
+  .row-result strong { font-size: 1.65rem; }
+  .detail-context { grid-template-columns: 1fr; gap: 28px; }
+}
+@media(max-width: 460px) {
+  .collection-row { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .row-result { display: flex; align-items: baseline; gap: 14px; }
+  .row-result span { margin: 0; }
+}
+  :scope { padding-top: 0; padding-bottom: 48px; }
+  .work-index { display: block; margin: 28px 0 0; }
+  .section-heading { margin-bottom: 0; }
+  [hidden] { display: none !important; }
+}
+
+/* Live embed on a detail page.
+
+   Case studies never take part in a page turn (book.js), so the stage holds
+   either the live frame or — on narrow screens, where work-preview.js does not
+   create the frame at all — the screenshot. Never both. */
+.embed-stage { position: relative; background: #f0f3f4; aspect-ratio: 16 / 10; }  /* overridden inline from the asset's own size */
+.embed-poster, .embed-frame { position: absolute; inset: 0; width: 100%; height: 100%; }
+.embed-poster { object-fit: contain; }
+.embed-frame { display: block; border: 0; }
+.embed-frame iframe { border: 0; }
+/* A fixed-size Tableau dashboard is rendered at its own width and then scaled
+   from the top-left corner to the stage, so nothing is clipped and the two side
+   margins stay equal. The overflow rule keeps the pre-scale size from spilling
+   out while the viz is still loading.
+   Keep the whole embed on screen. The sheet scrolls on its own, so an embed
+   taller than the sheet forces a scroll just to see the bottom of it; this caps
+   the stage at the sheet's visible height less the room the caption and the
+   surrounding margins need. --book-header-height is the value book.js measures
+   and sets on :root. */
+.embed-stage { overflow: hidden; max-height: calc(100vh - var(--book-header-height, 89px) - 132px); }
+tableau-viz.embed-frame { transform-origin: top left; }

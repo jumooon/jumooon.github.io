@@ -2,33 +2,34 @@
 
    The desktop shows the book as a two-page spread and turns its right half over
    the spine in the middle (book.js). A phone is one page, so it turns the way a
-   single sheet of paper does: the part under the finger is lifted and carried
-   with it, and the page rolls over a fold between the two. The page is held by
-   the finger rather than played as a set animation. What lives in this file:
+   single sheet of paper does: a corner lifts and the page rolls over a fold. The
+   turn is always the same set motion, started by a tap — the menu, the room
+   guide at the foot of the page, Back/Forward — or a quick swipe (book.js);
+   it never follows the finger, which keeps the work per frame to a minimum.
+   What lives in this file:
 
      beginCurl / foldFor / curlTo       the page curl (its own WebGL renderer)
-     beginSlide / slideTo               the live slide, if the curl is unavailable
-     hint                               Home's swipe hint and first-visit dog-ear
-     touch handlers, holdHome           gestures below 760px
+     beginSlide / slideTo               the slide, if the curl is unavailable
+     menu (three lines, top left)       the rooms as a directory
+     guide (foot of the page)           ‹ previous room · 02 / 05 · next room ›
+     peekCurl                           Home's first-visit dog-ear
+     holdHome                           Home's snapshot, taken at the touch
 
    book.js hands in `core`: its snapshot, settle/finish and history functions,
    and accessors for the values it reassigns (pages, ids, current, active, raf).
-   book.js calls turn() for a menu tap / Back on a phone, sync() after every
-   settle, and cacheImage() with idle snapshots. Load this file before book.js. */
+   book.js calls turn() for a turn on a phone, sync() after every settle, and
+   cacheImage() with idle snapshots. Load this file before book.js. */
 window.createBookPhone = function(core) {
   'use strict';
-  const {book,header,cache,reduced,narrow,detailOpen,finish,syncOcean,updateHeader,texture,preparePageImages,navigate,pushPage}=core;
-  let hint=null;
+  const {book,header,cache,reduced,narrow,narrowMqListen,detailOpen,finish,syncOcean,updateHeader,texture,preparePageImages,navigate}=core;
 
-  // Phones: one sheet, slid rather than curled. Below 760px the screen is a
-  // single page, not a two-page spread, so there is no spine to fold over. Going
+  // ---- The slide (if the curl is unavailable) --------------------------------
+  // One sheet, slid rather than curled. Going
   // forward, the next page is laid over the current one from the right edge;
   // going back, the current page is lifted off to the right, uncovering the one
   // beneath. The covered page drifts a little the same way and dims, and the top
-  // page casts a soft shadow on it. Both sheets stay live DOM — nothing is
-  // rasterised, which also spares the phone the snapshot work the curl needs —
-  // and each carries a copy of the header in its own colours, so the menu travels
-  // with its page as it does in the curl.
+  // page casts a soft shadow on it. Both sheets stay live DOM, and each carries
+  // a copy of the header in its own colours, so the header travels with its page.
   const SLIDE_MS=560,UNDER_SHIFT=.28,UNDER_DIM=.16;
   const easeOut=t=>1-Math.pow(1-t,3);
   const easeInOut=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
@@ -63,17 +64,12 @@ window.createBookPhone = function(core) {
         top.style.transform=topHead.style.transform='translate3d('+topX+'px,0,0)';
         under.style.transform=underHead.style.transform='translate3d('+underX+'px,0,0)';
         dim.style.opacity=String(cover*UNDER_DIM);
-        hint?.follow(state,topX);
       },
       cleanup(){
         [top,under].forEach(el=>{el.style.removeProperty('transform');el.classList.remove('slide-top')});
         topHead.remove();underHead.remove();dim.remove();
         book.classList.remove('is-sliding');
-      },
-      // The drag interface shared with the curl (see the touch handlers).
-      update(x,y,dx){state.paint(Math.max(0,Math.min(1,(forward?-dx:dx)/w)))},
-      progress(){return state.p},
-      release(commit){settleDrag(state,commit)}};
+      }};
     return state;
   }
   function animateSlide(state,to,ms,ease,done){
@@ -97,35 +93,26 @@ window.createBookPhone = function(core) {
   function slideTo(target){
     const state=beginSlide(target);core.active=state;syncOcean();
     book.setAttribute('aria-busy','true');
-    hint?.away();
     state.paint(0);
     animateSlide(state,1,SLIDE_MS,easeInOut,()=>endSlide(state,true));
   }
-  // A released finger: finish the way it was going, at a speed that matches the
-  // distance left, or fall back.
-  function settleDrag(state,commit){
-    const left=commit?1-state.p:state.p;
-    animateSlide(state,commit?1:0,Math.max(160,Math.min(420,left*SLIDE_MS)),easeOut,()=>endSlide(state,commit));
-  }
-
   // ---- The page curl --------------------------------------------------------
   //
-  // A phone page turns the way paper does: the part under the finger is lifted
-  // and carried to the finger, and the page rolls over a fold between the two.
-  // The fold is a cylinder of radius R lying across the page, perpendicular to
-  // the drag; everything past its axis wraps round it and, beyond half a turn,
-  // lies back over the page face down, showing the paper's back. Drag straight
-  // left and the fold runs straight down the page; start low (or high) and the
-  // bottom (or top) corner leads, so the fold runs slightly on the diagonal.
+  // A phone page turns the way paper does: a point near the bottom corner is
+  // lifted and carried across, and the page rolls over a fold between the two.
+  // The fold is a cylinder of radius R lying across the page, tilted slightly so
+  // the corner leads; everything past its axis wraps round it and, beyond half a
+  // turn, lies back over the page face down, showing the paper's back.
   //
   // Forward, the current page is the sheet and the next page is live beneath.
   // Back, the previous page is the sheet: it unrolls in from the left over the
-  // live current page, the roll staying under the finger, and lands flat where
-  // the live page takes over. One snapshot per turn, uploaded while idle by
-  // warm() (cacheImage below), so a swipe starts without waiting for pixels.
+  // live current page and lands flat, where the live page takes over. One
+  // snapshot per turn, uploaded while idle by warm() (cacheImage below), so a
+  // turn starts without waiting for pixels.
   //
   // The geometry runs on the GPU: a fixed mesh, and per frame only four numbers
-  // (fold point, direction, radius). foldPoint() is its JavaScript twin, used by
+  // (fold point, direction, radius), and the motion is fixed, so a frame costs
+  // the same however the turn was started. foldPoint() is its JavaScript twin, used by
   // the tests; goneAt() finds how far the fold must travel for the page to have
   // left the screen entirely.
   const PI=Math.PI,CURL_MS=950,TILT=.18;
@@ -292,48 +279,24 @@ window.createBookPhone = function(core) {
     const m=getComputedStyle(el).backgroundColor.match(/[\d.]+/g);
     return m&&m.length>=3?m.slice(0,3).map(n=>Number(n)/255):[0.98,0.99,0.99];
   }
-  // opts: {x, y} where the finger went down (a drag), or {C, n} for a set turn.
+  // A set turn: the menu, a room-guide arrow, Back/Forward, a quick swipe.
+  // opts.C / opts.n: the lifted point and the fold's direction.
   function beginCurl(target,opts={}){
     const from=core.current,forward=target>from,sheetIndex=forward?from:target;
     const w=book.clientWidth,h=book.clientHeight,rMax=Math.max(26,Math.min(60,w*.13));
-    const y0=opts.y??h*.78,lean=y0>h/2?1:-1;
-    const C=opts.C||{x:w,y:Math.max(0,Math.min(h,y0))};
-    const state={curl:true,from,target,destination:target,forward,w,h,C,rMax,ready:false,
-      n:opts.n||norm(1,lean*TILT),D:0,
-      fold(){return foldFor(C,state.n,state.D,rMax)},
-      gone(){return goneAt(C,state.n,rMax,h)},
-      progress(){const c=crestOf(C,state.n,state.D,rMax)/w;return Math.max(0,Math.min(1,forward?1-c:c))},
-      update(x,y,dx,dy){
-        if(forward){
-          // The grabbed point follows the finger; the corner on the finger's side leads.
-          const vx=Math.max(0,-dx),vy=Math.max(-.6*vx,Math.min(.6*vx,-dy+lean*Math.min(vx,w)*TILT));
-          if(vx>0.5)state.n=norm(vx,vy);
-          state.D=Math.hypot(vx,vy);
-        }else{
-          // The roll stays under the finger: it enters at the left edge and the
-          // page lies flat as the finger reaches the right side.
-          const gain=Math.min(2.5,w/Math.max(1,w-opts.x));
-          const crest=Math.max(0,Math.min(w,(x-opts.x)*gain)),n=state.n;
-          let D=2*((C.x+rMax*n.x-crest)*n.x)-PI*rMax;
-          if(D<PI*rMax)D=Math.max(0,(C.x-crest)/(1/n.x-n.x/PI));
-          state.D=Math.min(state.gone(),D);
-        }
-        requestPaint(state);
-      },
-      release(commit){
-        if(!state.ready){state.pendingRelease=commit;return}
-        const to=forward===commit?state.gone():0;
-        animateD(state,to,Math.max(200,Math.min(650,Math.abs(to-state.D)/state.gone()*900)),easeOut,()=>endCurl(state,commit));
-      }};
+    const C=opts.C||{x:w,y:h*.8},n=opts.n||norm(1,TILT);
+    const state={curl:true,from,target,destination:target,forward,w,h,C,n,rMax,ready:false,D:0,
+      fold(){return foldFor(C,n,state.D,rMax)},
+      gone(){return goneAt(C,n,rMax,h)}};
     state.D=forward?0:state.gone();
     // Going forward the next page is live beneath: show it now, under the
     // current page, so its first layout is done before the sheet lifts.
     const incoming=core.pages[target],outgoing=core.pages[from];
     if(forward){incoming.hidden=false;incoming.scrollTop=core.scrollPositions[target];incoming.style.zIndex='1';outgoing.style.zIndex='2'}
     incoming.inert=true;outgoing.inert=true;
-    // A live Home is drawn with moving water, so its snapshot is taken afresh, as
-    // on the desktop — for a finger, already at touchstart (see holdHome).
-    if(!opts.touch&&sheetIndex===core.current&&core.ids[sheetIndex]==='hero'&&!heldRecently())cache.delete(sheetIndex);
+    // A live Home is drawn with moving water, so its snapshot is taken afresh —
+    // unless a finger on the menu or the guide has just taken it (holdHome).
+    if(sheetIndex===core.current&&core.ids[sheetIndex]==='hero'&&!heldRecently())cache.delete(sheetIndex);
     (async()=>{
       await preparePageImages(sheetIndex);
       if(core.active!==state)return;
@@ -342,36 +305,28 @@ window.createBookPhone = function(core) {
       const r=renderer();
       r.prepare(image,w,h,paperOf(core.pages[sheetIndex]));
       r.draw(state.fold(),state.D);
+      // The overlay covers the book only (the room guide below it stays live).
       const overlay=document.createElement('div');overlay.className='paper-turn';
       overlay.inert=true;overlay.setAttribute('aria-hidden','true');
+      const box=book.getBoundingClientRect();
+      Object.assign(overlay.style,{top:box.top+'px',height:box.height+'px',bottom:'auto'});
       overlay.append(r.canvas);document.body.append(overlay);state.overlay=overlay;state.r=r;
-      if(forward){outgoing.style.visibility='hidden';updateHeader(target)}
+      if(forward){outgoing.style.visibility='hidden';updateHeader(target);syncGuide(target)}
       book.classList.add('is-page-turning');
       state.ready=true;
-      if(state.onReady)state.onReady();
-      else if(state.pendingRelease!==undefined)state.release(state.pendingRelease);
+      state.onReady?.();
     })().catch(error=>{
       if(core.active!==state)return;
       console.warn('Page curl unavailable; using the slide.',error);
       curlBroken=true;
-      const pending=state.pendingRelease,touchRef=opts.touch;
       state.target=state.destination=state.from;finish(true);
-      if(state.peek){hint.peekSlide();return}
-      if(state.onReady)slideTo(target);                         // a set turn
-      else if(touchRef&&!touchRef.ended){                       // the finger is still down
-        const s=beginSlide(target);core.active=s;touchRef.state=s;s.update(touchRef.lastX,touchRef.lastY,touchRef.lastDx||0,0);
-      }else if(pending)slideTo(target);
+      if(state.peek)peekSlide();else slideTo(target);
     });
     return state;
   }
-  function requestPaint(state){
-    if(!state.ready||state.painting)return;
-    state.painting=true;
-    core.raf=requestAnimationFrame(()=>{state.painting=false;if(core.active===state)state.r.draw(state.fold(),state.D)});
-  }
   function animateD(state,to,ms,ease,done){
     const from=state.D;let start;
-    cancelAnimationFrame(core.raf);state.painting=false;
+    cancelAnimationFrame(core.raf);
     function step(ts){
       if(core.active!==state)return;
       if(start===undefined)start=ts;
@@ -388,171 +343,144 @@ window.createBookPhone = function(core) {
     else state.target=state.destination=state.from;
     finish();
   }
-  // A whole turn from the menu, Back/Forward or the hint's tap: the bottom
-  // corner leads, as a right hand turning a page would.
+  // The bottom corner leads, as a right hand turning a page would.
   function curlTo(target){
-    const h=book.clientHeight,w=book.clientWidth;
-    const state=beginCurl(target,{C:{x:w,y:h*.8},n:norm(1,TILT)});core.active=state;syncOcean();
+    const state=beginCurl(target);core.active=state;syncOcean();
     book.setAttribute('aria-busy','true');
-    hint?.away();
     state.onReady=()=>animateD(state,state.forward?state.gone():0,CURL_MS,easeInOut,()=>endCurl(state,true));
   }
 
-  // Phones, Home only: the desktop's right-hand chevron, drawn in the sky's ink
-  // at rest opacity, to say the book goes on to the right. On a first visit it
-  // lights once, 1.5 s after Home appears — label, glow — while Home is drawn
-  // back a finger's width so the edge of the Work page shows, then lets go.
-  // Tapping it turns the page. Once the reader has turned a page it is not shown
-  // again for the visit; the lit peek is remembered on the device.
-  hint=(()=>{
-    const KEY='jm.swipeHint.seen';
-    const b=document.createElement('button');
-    b.type='button';b.className='swipe-hint';b.hidden=true;
-    b.innerHTML='<span class="page-arrow-light" aria-hidden="true"></span><svg class="page-arrow-glyph" viewBox="0 0 12 24" aria-hidden="true"><path d="M3 3l6 9-6 9"/></svg><span class="page-arrow-label"></span>';
-    document.body.append(b);
-    let turned=false,peeked=false,timer=0;
-    const seen=()=>{if(peeked)return true;try{return localStorage.getItem(KEY)==='1'}catch{return false}};
-    const nameOf=i=>{const a=document.querySelector('#nav-links a[href="#'+core.ids[i]+'"]');return (a&&a.textContent.trim())||core.ids[i]||''};
-    b.addEventListener('click',()=>{
-      b.classList.add('is-pressed');setTimeout(()=>b.classList.remove('is-pressed'),420);
-      navigate(core.current+1);
-    });
-    function peek(){
-      if(core.active||document.hidden||b.hidden||reduced.matches)return;
-      peeked=true;try{localStorage.setItem(KEY,'1')}catch{}
-      b.classList.add('is-lit');
-      if(curlBroken){peekSlide();return}
-      // Home's bottom corner lifts like a dog-ear and settles back.
-      const w=book.clientWidth,h=book.clientHeight;
-      const s=beginCurl(core.current+1,{C:{x:w,y:h*.92},n:norm(1,.6)});s.peek=true;core.active=s;syncOcean();
-      s.onReady=()=>animateD(s,Math.min(64,w*.16),560,easeOut,()=>setTimeout(()=>{
-        if(core.active===s)animateD(s,0,620,easeInOut,()=>endCurl(s,false));
-      },380));
-    }
-    // Without the curl: Work's edge slides in a finger's width and back.
-    function peekSlide(){
-      if(core.active||b.hidden)return;
-      b.classList.add('is-lit');
-      const s=beginSlide(core.current+1);s.peek=true;core.active=s;syncOcean();
-      s.paint(0);
-      animateSlide(s,.08,460,easeOut,()=>setTimeout(()=>{
-        if(core.active===s)animateSlide(s,0,560,easeInOut,()=>endSlide(s,false));
-      },420));
-    }
-    return {
-      peekSlide,
-      sync(){
-        if(core.ids.length&&core.ids[core.current]!=='hero')turned=true;
-        const show=narrow()&&!turned&&core.ids[core.current]==='hero'&&core.ids.length>1&&!detailOpen();
-        b.hidden=!show;b.classList.remove('is-away','is-lit');b.style.removeProperty('transform');
-        clearTimeout(timer);
-        if(!show)return;
-        const n=nameOf(core.current+1);
-        b.querySelector('.page-arrow-label').textContent=n;b.setAttribute('aria-label','Next page: '+n);
-        if(!seen()&&!reduced.matches)timer=setTimeout(peek,1500);
-      },
-      // During the peek, keep the chevron just inside the edge of the Work page.
-      follow(state,topX){if(state.peek&&!b.hidden)b.style.transform='translateX('+(topX-state.w)+'px)'},
-      away(){clearTimeout(timer);b.classList.add('is-away')}
-    };
-  })();
-
-  // Touch. The sheet follows the finger (see beginCurl). The direction is
-  // decided once the finger has moved 10px: mostly sideways takes the gesture
-  // from the page's vertical scroll, otherwise it is left alone. Past the first
-  // or last page the sheet only stretches and springs back. Wider touch screens
-  // are handled in book.js (a quick swipe turns the page).
-  let touch=null;
-  book.addEventListener('touchstart',e=>{
-    if(!narrow()){touch=null;return}
-    if(core.active?.peek){core.active.target=core.active.destination=core.active.from;finish(true)}
-    const t=e.touches[0];
-    touch=e.touches.length===1&&!e.target.closest('.collection-wall, .embed-stage, iframe, input, textarea')?{x:t.clientX,y:t.clientY,at:performance.now(),lock:false,trail:[]}:null;
-    if(touch)holdHome(true);
-  },{passive:true});
-  // On Home a swipe curls a snapshot of the moving water. Taking it only once
-  // the swipe is recognised would hold the page still under the finger while it
-  // is drawn, so a touch on Home stops the water and starts the snapshot at
-  // once; the water runs on again when the finger lifts without turning.
-  // The same for a finger on the menu or the hint: the tap turns the page
-  // a moment later, and the snapshot is ready by then. The water waits a
-  // little after the finger lifts, so the tap's turn starts on this very frame.
+  // ---- Home's snapshot, taken at the touch ------------------------------------
+  // A tap on the menu or the room guide turns the page a moment later. On Home
+  // the page is drawn with moving water, so the touch itself stops the water and
+  // takes the snapshot, and hands it to the GPU, while the finger is still down;
+  // the turn then has nothing left to wait for. The water runs on again shortly
+  // after the finger lifts if no turn started.
   let heldAt=-1e9,releaseTimer=0;
   function holdHome(on){
     if(on){
       if(!narrow()||core.active||detailOpen()||curlBroken||reduced.matches||core.ids[core.current]!=='hero')return;
       clearTimeout(releaseTimer);
       if(core.holdingHome&&performance.now()-heldAt<1000)return;
-      // The snapshot goes to the GPU straight away, while the finger is still
-      // deciding, so the curl has nothing left to wait for.
       core.holdingHome=true;heldAt=performance.now();syncOcean();cache.delete(core.current);
       texture(core.current).then(cacheImage).catch(()=>{});
     }else if(core.holdingHome){
       clearTimeout(releaseTimer);
-      releaseTimer=setTimeout(()=>{if(core.holdingHome&&!touch){core.holdingHome=false;syncOcean()}},400);
+      releaseTimer=setTimeout(()=>{if(core.holdingHome){core.holdingHome=false;syncOcean()}},400);
     }
   }
   const heldRecently=()=>core.holdingHome&&performance.now()-heldAt<1500;
-  document.addEventListener('touchstart',e=>{if(e.target.closest?.('.site-header a, .swipe-hint'))holdHome(true)},{passive:true});
-  document.addEventListener('touchend',e=>{if(e.target.closest?.('.site-header a, .swipe-hint'))holdHome(false)},{passive:true});
-  book.addEventListener('touchmove',e=>{
-    if(!touch||!narrow()||detailOpen())return;
-    if(e.touches.length!==1){cancelTouch();return}
-    const t=e.touches[0],dx=t.clientX-touch.x,dy=t.clientY-touch.y;
-    if(!touch.lock){
-      if(Math.hypot(dx,dy)<10)return;
-      if(Math.abs(dx)<Math.abs(dy)*1.2||core.active){touch=null;return}
-      touch.lock=true;
-      const target=core.current+(dx<0?1:-1);
-      if(target<0||target>=core.ids.length)touch.edge=true;
-      else{touch.state=curlBroken||reduced.matches?beginSlide(target):beginCurl(target,{x:touch.x,y:touch.y,touch});core.active=touch.state;syncOcean();hint?.away()}
-    }
-    if(e.cancelable)e.preventDefault();
-    const now=performance.now();
-    touch.trail.push({x:t.clientX,at:now});
-    while(touch.trail.length>2&&now-touch.trail[0].at>100)touch.trail.shift();
-    touch.lastX=t.clientX;touch.lastY=t.clientY;touch.lastDx=dx;
-    if(touch.edge){stretch(dx);return}
-    const s=touch.state;if(core.active!==s){touch=null;return}
-    s.update(t.clientX,t.clientY,dx,dy);
-  },{passive:false});
-  book.addEventListener('touchend',()=>{
-    const tt=touch;touch=null;holdHome(false);if(!tt||detailOpen())return;
-    tt.ended=true;
-    if(!tt.lock)return;
-    if(tt.edge){unstretch();return}
-    const s=tt.state;if(core.active!==s)return;
-    const a=tt.trail[0],b=tt.trail[tt.trail.length-1];
-    const v=a&&b&&b.at>a.at?(b.x-a.x)/(b.at-a.at):0;      // px per ms
-    const toward=s.forward?-v:v;                           // + means "keep going"
-    const done=s.progress();
-    const commit=(done>.25&&toward>-.2)||(toward>.35&&done>.03);
-    if(commit)pushPage(s.target);
-    s.release(commit);
-  },{passive:true});
-  function cancelTouch(){
-    const tt=touch;touch=null;holdHome(false);if(!tt||!tt.lock)return;
-    tt.ended=true;
-    if(tt.edge)unstretch();else if(core.active===tt.state)tt.state.release(false);
+  const TAPS='.room-menu a, .room-step';
+  document.addEventListener('touchstart',e=>{if(e.target.closest?.(TAPS))holdHome(true)},{passive:true});
+  document.addEventListener('touchend',e=>{if(e.target.closest?.(TAPS))holdHome(false)},{passive:true});
+  document.addEventListener('touchcancel',()=>holdHome(false),{passive:true});
+
+  // ---- Rooms: names and numbers ----------------------------------------------
+  // The pages are numbered as their own headings number them (Work is 01,
+  // Method 02 ...); Home is the entrance, 00.
+  const roomName=i=>{const a=document.querySelector('#nav-links a[href="#'+core.ids[i]+'"], #nav-brand[href="#'+core.ids[i]+'"]');return (a&&a.textContent.trim())||core.ids[i]||''};
+  const roomNumber=i=>String(i).padStart(2,'0');
+  const chevron=d=>'<svg class="room-chevron" viewBox="0 0 8 16" aria-hidden="true"><path d="'+d+'"/></svg>';
+
+  // ---- The menu: three lines at the top left ---------------------------------
+  // On a phone the menu row is folded away behind a button, and opens as a
+  // directory of rooms over the top of the page. It sits over the page rather
+  // than pushing it down, so opening it moves nothing. Choosing a room closes
+  // it and turns the page; so does a tap anywhere else, or Escape.
+  const nav=header.querySelector('.nav');
+  const toggle=document.createElement('button');
+  toggle.type='button';toggle.className='menu-toggle';
+  toggle.setAttribute('aria-label','Menu');toggle.setAttribute('aria-expanded','false');toggle.setAttribute('aria-controls','room-menu');
+  toggle.innerHTML='<svg viewBox="0 0 20 14" aria-hidden="true"><path class="menu-line menu-line--1" d="M1 1h18"/><path class="menu-line menu-line--2" d="M1 7h18"/><path class="menu-line menu-line--3" d="M1 13h18"/></svg>';
+  const menu=document.createElement('div');
+  menu.className='room-menu';menu.id='room-menu';menu.hidden=true;
+  nav.prepend(toggle);header.append(menu);
+  function setMenu(open){
+    if(open&&!narrow())return;
+    header.classList.toggle('menu-open',open);menu.hidden=!open;
+    toggle.setAttribute('aria-expanded',String(open));toggle.setAttribute('aria-label',open?'Close menu':'Menu');
+    if(open)menu.querySelector('[aria-current]')?.focus({preventScroll:true});
   }
-  book.addEventListener('touchcancel',cancelTouch,{passive:true});
-  function stretch(dx){
-    const t='translate3d('+Math.sign(dx)*Math.min(56,Math.abs(dx)*.25)+'px,0,0)';
-    core.pages[core.current].style.transform=t;header.style.transform=t;
+  function buildMenu(){
+    menu.replaceChildren(...core.ids.map((id,i)=>{
+      const a=document.createElement('a');a.href='#'+id;
+      a.innerHTML='<span class="room-menu-no"></span><span class="room-menu-name"></span>';
+      a.firstChild.textContent=roomNumber(i);a.lastChild.textContent=roomName(i);
+      if(i===core.current)a.setAttribute('aria-current','page');
+      return a;
+    }));
   }
-  function unstretch(){
-    const els=[core.pages[core.current],header];
-    els.forEach(el=>{el.style.transition='transform .32s cubic-bezier(.2,.8,.2,1)';el.style.removeProperty('transform')});
-    setTimeout(()=>els.forEach(el=>el.style.removeProperty('transition')),340);
+  toggle.addEventListener('click',()=>setMenu(menu.hidden));
+  menu.addEventListener('click',e=>{if(e.target.closest('a'))setMenu(false)},true);
+  document.addEventListener('pointerdown',e=>{if(!menu.hidden&&!header.contains(e.target))setMenu(false)},true);
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!menu.hidden){setMenu(false);toggle.focus()}});
+  narrowMqListen(()=>{if(!narrow())setMenu(false)});
+
+  // ---- The room guide: a line at the foot of the page ------------------------
+  //   ‹ Work            02 / 05            About ›
+  // The neighbouring rooms by name, and where you are. A tap turns the page with
+  // the curl above. Hidden in a case study, whose only exit is "All work".
+  const guide=document.createElement('nav');
+  guide.className='room-guide';guide.setAttribute('aria-label','Rooms');
+  guide.innerHTML='<button type="button" class="room-step room-step--prev"><span class="room-step-light" aria-hidden="true"></span>'+chevron('M6 2 2 8l4 6')+'<span class="room-step-name"></span></button>'
+    +'<span class="room-count"></span>'
+    +'<button type="button" class="room-step room-step--next"><span class="room-step-light" aria-hidden="true"></span><span class="room-step-name"></span>'+chevron('M2 2l4 6-4 6')+'</button>';
+  document.body.append(guide);
+  const [prev,next]=guide.querySelectorAll('.room-step'),count=guide.querySelector('.room-count');
+  function press(b){b.classList.remove('is-pressed');void b.offsetWidth;b.classList.add('is-pressed');setTimeout(()=>b.classList.remove('is-pressed'),420)}
+  prev.addEventListener('click',()=>{press(prev);navigate(core.current-1)});
+  next.addEventListener('click',()=>{press(next);navigate(core.current+1)});
+  // i: the page the guide should describe — the current one, or the one a
+  // forward turn is uncovering (it is live beneath the sheet from the start).
+  function syncGuide(i=core.current){
+    const last=core.ids.length-1;
+    guide.dataset.page=core.ids[i]||'';
+    prev.hidden=i<=0;next.hidden=i>=last;
+    if(!prev.hidden){const n=roomName(i-1);prev.querySelector('.room-step-name').textContent=n;prev.setAttribute('aria-label','Previous room: '+n)}
+    if(!next.hidden){const n=roomName(i+1);next.querySelector('.room-step-name').textContent=n;next.setAttribute('aria-label','Next room: '+n)}
+    count.textContent=roomNumber(i)+' / '+roomNumber(last);
+    count.setAttribute('aria-label','Room '+i+' of '+last);
   }
 
-  function turn(target){if(curlBroken)slideTo(target);else curlTo(target)}
-  // warm() hands idle snapshots here so the GPU already has them at a swipe.
+  // ---- First visit: a dog-ear on Home ----------------------------------------
+  // Once per device, 1.5 s after Home appears, Home's bottom corner lifts and
+  // settles back while the guide's next room lights up — the page turns, and
+  // this is where to tap.
+  const KEY='jm.swipeHint.seen';
+  let peeked=false,peekTimer=0;
+  const seen=()=>{if(peeked)return true;try{return localStorage.getItem(KEY)==='1'}catch{return false}};
+  function peekCurl(){
+    if(core.active||document.hidden||reduced.matches||!narrow()||core.ids[core.current]!=='hero'||detailOpen())return;
+    peeked=true;try{localStorage.setItem(KEY,'1')}catch{}
+    next.classList.add('is-lit');setTimeout(()=>next.classList.remove('is-lit'),2200);
+    if(curlBroken){peekSlide();return}
+    const w=book.clientWidth,h=book.clientHeight;
+    const s=beginCurl(core.current+1,{C:{x:w,y:h*.92},n:norm(1,.6)});s.peek=true;core.active=s;syncOcean();
+    s.onReady=()=>animateD(s,Math.min(64,w*.16),560,easeOut,()=>setTimeout(()=>{
+      if(core.active===s)animateD(s,0,620,easeInOut,()=>endCurl(s,false));
+    },380));
+  }
+  function peekSlide(){
+    if(core.active)return;
+    const s=beginSlide(core.current+1);s.peek=true;core.active=s;syncOcean();
+    s.paint(0);
+    animateSlide(s,.08,460,easeOut,()=>setTimeout(()=>{
+      if(core.active===s)animateSlide(s,0,560,easeInOut,()=>endSlide(s,false));
+    },420));
+  }
+
+  function turn(target){setMenu(false);if(curlBroken)slideTo(target);else curlTo(target)}
+  // warm() hands idle snapshots here so the GPU already has them at a turn.
   function cacheImage(image){
     if(curlBroken)return;
     try{renderer().cacheImage(image)}catch(error){curlBroken=true;console.warn('Page curl unavailable; using the slide.',error)}
   }
-  return {turn,cacheImage,sync(){if(hint)hint.sync()},
+  function sync(){
+    buildMenu();syncGuide();setMenu(false);
+    clearTimeout(peekTimer);
+    if(narrow()&&core.ids[core.current]==='hero'&&core.ids.length>1&&!detailOpen()&&!seen()&&!reduced.matches)peekTimer=setTimeout(peekCurl,1500);
+  }
+  return {turn,cacheImage,sync,
     // For tests: the fold geometry, shared with the vertex shader.
     geometry:{foldFor,foldPoint,crestOf,goneAt}};
 };

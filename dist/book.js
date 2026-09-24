@@ -977,15 +977,15 @@
       e.preventDefault();b.classList.add('is-flash');setTimeout(()=>b.classList.remove('is-flash'),480);
       press(b);navigate(current+(e.key==='ArrowLeft'?-1:1));
     });
-    // A quick horizontal swipe on a touch screen wider than a phone turns the
-    // page as the arrows would. Phones (book-phone.js) hold the page instead.
+    // A quick horizontal swipe on a touch screen turns the page as the arrows
+    // would — the same set turn, never one that follows the finger.
     let swipe=null;
     book.addEventListener('touchstart',e=>{
       const t=e.touches[0];
-      swipe=!narrow()&&e.touches.length===1&&!e.target.closest('.collection-wall, .embed-stage, iframe, input, textarea')?{x:t.clientX,y:t.clientY,at:performance.now()}:null;
+      swipe=e.touches.length===1&&!e.target.closest('.collection-wall, .embed-stage, iframe, input, textarea')?{x:t.clientX,y:t.clientY,at:performance.now()}:null;
     },{passive:true});
     book.addEventListener('touchend',e=>{
-      const sw=swipe;swipe=null;if(!sw||narrow()||detailOpen())return;
+      const sw=swipe;swipe=null;if(!sw||detailOpen())return;
       const t=e.changedTouches[0],dx=t.clientX-sw.x,dy=t.clientY-sw.y,dt=performance.now()-sw.at;
       if(Math.abs(dx)>64&&Math.abs(dx)>2*Math.abs(dy)&&dt<700)navigate(current+(dx>0?-1:1));
     },{passive:true});
@@ -1003,7 +1003,7 @@
   // reassigns (pages, ids, current, active, raf) are passed as
   // accessors, never copied. Without book-phone.js a phone gets the desktop turn.
   const core={
-    book,header,cache,reduced,narrow,detailOpen,finish,syncOcean,updateHeader,texture,preparePageImages,navigate,pushPage,
+    book,header,cache,reduced,narrow,narrowMqListen:fn=>narrowMq.addEventListener('change',fn),detailOpen,finish,syncOcean,updateHeader,texture,preparePageImages,navigate,pushPage,
     get pages(){return pages},get ids(){return ids},get current(){return current},get scrollPositions(){return scrollPositions},
     get active(){return active},set active(v){active=v},
     get raf(){return raf},set raf(v){raf=v},

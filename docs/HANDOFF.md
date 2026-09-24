@@ -1,5 +1,33 @@
 # Portfolio page-turn handoff — 2026-09-16
 
+## 2026-09-25 — Phones: set turns only, room guide, menu behind three lines
+
+- The page no longer follows the finger. Every phone turn is the same set
+  curl (curlTo: bottom corner leads, 950 ms), started by a tap — the room
+  guide, the menu, Back/Forward — or a quick horizontal swipe (book.js, now for
+  all widths: >64 px, mostly sideways, <700 ms). The drag code, the edge
+  stretch and the right-edge Home chevron are gone; the curl geometry,
+  renderer and tests are unchanged.
+- Room guide (book-phone.js, .room-guide): fixed at the foot of the page,
+  "‹ previous room · 02 / 05 · next room ›". Numbers follow the page headings
+  (Work 01 … Contact 05, Home 00). A forward turn switches it to the page being
+  uncovered as soon as the curl is on screen. Colours follow the page (a veil
+  of --sky-base on Home, dark on Contact); hidden in a case study. Pages keep
+  --guide-h clear at their end (padding-bottom on .work/.method/.about,
+  .art-collection, footer).
+- Menu: below 760px the menu row is replaced by a three-line button (top
+  left) that opens a directory of rooms (00 Home … 05 Contact) over the top of
+  the page; the header height never changes (59 px vs 89 px before), so
+  opening it moves nothing. Closes on choosing a room, a tap elsewhere, Escape
+  or any page change. Desktop header unchanged (89 px, verified).
+- First visit on Home: the bottom-corner dog-ear still plays once, now with the
+  guide's next room lit.
+- Home snapshot is taken on touchstart of a guide button or menu link
+  (holdHome), so a tap from Home turns without waiting.
+- Verified (headless Chromium 390x844, touch): guide next/prev, menu open /
+  outside-tap close / choose room, quick swipe, Back, detail mode hides guide
+  and header, desktop 1280 unaffected. Not verified on a physical phone.
+
 ## 2026-09-24 — Phone curl v2 (paper roll) and a faster Home snapshot
 
 - The phone no longer uses the desktop mesh. book-phone.js has its own small

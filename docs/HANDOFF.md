@@ -1,5 +1,11 @@
 # Portfolio page-turn handoff — 2026-09-16
 
+## 2026-09-25 — Phone Work links: no Tableau link, no arrow (desktop unchanged)
+
+- Tableau cases (investment, apple-warranty): the "Explore dashboard" link was phone-only, and is now not built at all. On a phone, tapping the dashboard picture still opens the zoom viewer. Desktop never showed this link.
+- On a phone, Work links show the label alone, with no " ↗". Arial has no such glyph, so an iPhone drew it as an emoji. On desktop the ↗ stays exactly as it was: it now sits in `span.link-glyph`, which book-phone.css hides only at ≤760px. (A first version removed it everywhere; the user asked for phone only.)
+- Checked in headless Chromium. Phone: link texts on the Work list and all seven cases, and the zoom viewer opens from the picture. Desktop against the committed build (f0b97fb): Work, every case and every page pixel-identical. The only differences were in the ocean (animated) and inside the marketing/research pictures, and those differ between two runs of the same build too. work-preview.js / book-phone.css ?v=20260925-glyph.
+
 ## 2026-09-25 — Phone turn paced by what is seen
 
 User: "still not smooth". The recording at 15:06 (60 fps, frame by frame) had no dropped frames in any of its six turns, so the problem was the motion itself. Simulated with the real geometry (390 px wide):

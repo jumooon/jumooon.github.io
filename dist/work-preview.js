@@ -226,23 +226,22 @@
     return figure;
   }
 
-  // For a live embed (Tableau, Shiny) the link is a phone's way in: a phone
-  // shows the screenshot, not the live dashboard, so there the link is shown
-  // (class phone-only; book-phone.css hides it above 760px, where the live
-  // dashboard is right there and the link would only send people away).
+  // On a phone the label alone, with no "↗": Arial has no such glyph, so an
+  // iPhone drew it as an emoji. Desktop keeps it as it was: it sits in its own
+  // span, which book-phone.css hides at phone width only.
+  // For the Shiny deck the link is a phone's way in: a phone shows the
+  // screenshot, not the live deck, so there the link is shown (class
+  // phone-only; book-phone.css hides it above 760px, where the live deck is
+  // right there). A Tableau dashboard has no link at all: on a phone its
+  // picture opens the zoom viewer when tapped (embedFigure), and on a wider
+  // screen the live dashboard is on the page.
+  const hasLink = asset => Boolean(asset.link) && asset.embedType !== 'tableau';
   function originalLink(asset) {
-    const a = node('a', 'original-link' + (asset.embed ? ' phone-only' : ''), asset.embed ? asset.label : asset.label + ' ↗');
+    const a = node('a', 'original-link' + (asset.embed ? ' phone-only' : ''), asset.label);
+    if (!asset.embed) a.append(node('span', 'link-glyph', ' ↗'));
     a.href = asset.link;
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
-    // A Tableau dashboard on a phone: Tableau's own phone layout spills off the
-    // screen, so the link opens the whole dashboard picture here instead, to
-    // pinch and pan (zoomView). Wider screens never see this link.
-    if (asset.embedType === 'tableau') a.addEventListener('click', e => {
-      if (!narrow.matches) return;
-      e.preventDefault();
-      zoomView(asset);
-    });
     return a;
   }
 
@@ -400,7 +399,7 @@
       const gallery = node('div', 'detail-gallery');
       gallery.append(asset.embed ? embedFigure(asset) : displayArtwork(asset, asset.src, true));
       // Beside a live embed the link is for phones only (see originalLink).
-      if (asset.link) gallery.append(originalLink(asset));
+      if (hasLink(asset)) gallery.append(originalLink(asset));
       if (asset.note) gallery.append(node('p', 'artifact-note', asset.note));
       if (asset.secondary && asset.layout !== 'pair') gallery.append(artwork(asset.secondary, asset.secondary.src));
       detail.append(gallery);
@@ -495,7 +494,7 @@
           const story = node('a', '', 'Read the story');
           story.href = '#' + c.id;
           actions.append(story);
-          if (asset.link) actions.append(originalLink(asset));
+          if (hasLink(asset)) actions.append(originalLink(asset));
           copy.append(actions);
           caption.append(copy);
           exhibit.append(label, displayArtwork(asset, '#' + c.id, c.id === 'investment'), caption);

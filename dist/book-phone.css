@@ -100,3 +100,6 @@
 .zoom-hint.is-gone { opacity: 0; }
 body.zoom-open { overflow: hidden; }
 @media (max-width: 760px) { .embed-stage.is-zoomable { cursor: zoom-in; } }
+
+/* Work links: no "↗" on a phone (an iPhone draws it as an emoji); desktop keeps it. */
+@media (max-width: 760px) { .original-link .link-glyph { display: none; } }

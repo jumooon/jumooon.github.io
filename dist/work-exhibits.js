@@ -46,7 +46,13 @@ window.workExhibits = {
     // Live on the detail page. Unlike public.tableau.com, shinyapps.io does serve
     // inside a frame — verified in Chrome, the deck renders and pages. A plain
     // iframe is enough; the screenshot below is the page-turn poster.
-    embed: 'https://jiungmoon.shinyapps.io/slides/', embedType: 'frame',
+    // ?history=false: the deck (Quarto reveal.js, history: true by default)
+    // otherwise pushes a history entry for every slide, and a framed page's
+    // entries join this page's history, so "All work" (history.back()) only
+    // stepped the deck back a slide. Reveal reads its options from the query
+    // string; with this, the slide still shows in the frame's hash but adds no
+    // entries (checked in Chrome: 2 slides forward, history.length unchanged).
+    embed: 'https://jiungmoon.shinyapps.io/slides/?history=false', embedType: 'frame',
     embedTitle: 'AS Carbon Audit presentation, live',
     link: 'https://jiungmoon.shinyapps.io/slides/#/total-emissions-by-office-stacked-by-category', label: 'View presentation'
   },

@@ -1,5 +1,14 @@
 # Portfolio page-turn handoff — 2026-09-16
 
+## 2026-09-25 — "All work" did nothing after paging the Shiny deck (desktop)
+
+User found it: on the AS Carbon case, after paging through the live deck, "← All work" did nothing.
+- Cause: the deck is Quarto reveal.js with `history: true` (read in Chrome: `Reveal.getConfig().history === true`; each `Reveal.next()` added one entry). A framed page's entries join this page's history, and "All work" steps back with `history.back()`, so it only stepped the deck back a slide. Reproduced on the live site, and in headless Chromium with the committed work-preview.js: the case stayed open.
+- Fix 1, work-exhibits.js: the embed is `…/slides/?history=false`. Reveal reads options from the query string. Checked in Chrome: `history` is false, the slide still shows in the hash, and two slides forward left `history.length` unchanged.
+- Fix 2, work-preview.js: `openedAt` records `history.length` when a case entry becomes current (opened by click, or reached by Back/Forward). "All work" uses `history.back()` only if the history has not grown since. Otherwise it closes the case directly and replaces the entry with #work. This covers any other embed that adds entries.
+- Headless Chromium: with the frame pushing two entries, All work now closes the case. Without it (Shiny and Tableau cases), behaviour is unchanged: history.back(), the same history states as before.
+- Desktop look unchanged. The phone link ("View presentation") still uses asset.link. ?v=20260925-allwork.
+
 ## 2026-09-25 — Phone Work links: no Tableau link, no arrow (desktop unchanged)
 
 - Tableau cases (investment, apple-warranty): the "Explore dashboard" link was phone-only, and is now not built at all. On a phone, tapping the dashboard picture still opens the zoom viewer. Desktop never showed this link.

@@ -530,12 +530,16 @@
         if (cases.has(id)) {
           route(id);
           history.pushState({ page: 'work', case: id }, '', '#work/' + id);
+          openedAt = history.length;
           return;
         }
         // Every case entry sits on top of the overview entry it was opened
         // from, except a case the visitor landed on by link (marked landing by
         // book.js): stepping back from that one would leave the site.
-        if (id === 'work' && history.state && history.state.case && !history.state.landing) { history.back(); return; }
+        // Unless the history has grown since the case opened: a live embed (a
+        // framed deck or dashboard) can add entries of its own, and Back would
+        // then only step that frame back. The case is then closed here.
+        if (id === 'work' && history.state && history.state.case && !history.state.landing && history.length === openedAt) { history.back(); return; }
         route(id);
         if (id === 'work' && history.state && history.state.case) history.replaceState({ page: 'work' }, '', '#work');
       });
@@ -543,8 +547,12 @@
       // study the history has left, open the one it has arrived at. When the
       // arrival also changes page, the case opens once the Work sheet settles.
       let pendingCase = null;
+      // history.length just after this case's entry became current, or -1 when
+      // unknown (then "All work" never steps back; see the click handler).
+      let openedAt = -1;
       document.addEventListener('book:history', event => {
         const want = event.detail.page === 'work' && cases.has(event.detail.case) ? event.detail.case : null;
+        openedAt = want ? history.length : -1;
         if (!detail.hidden && activeCase !== want) route('work');
         pendingCase = null;
         if (!want) return;

@@ -1,5 +1,19 @@
 # Portfolio page-turn handoff — 2026-09-16
 
+## 2026-09-25 — Phone turn paced by what is seen
+
+User: "still not smooth". The recording at 15:06 (60 fps, frame by frame) had no dropped frames in any of its six turns, so the problem was the motion itself. Simulated with the real geometry (390 px wide):
+- **A snap at the start.** The lift point sat at 0.8 h. With the tilt, the corner below it was already past the fold, so the first frame flipped a 25×140 px corner triangle over at once: a 50 px jump.
+- **Too fast in the middle.** The turn was timed by the fold distance D. The turned-over edge crosses the screen at the full speed of D, up to 36 px a frame. Once it leaves, the crest moves at half that, so the pace dropped from 36 to 18 px a frame in one step.
+- **Nothing moving at the end.** The last ~20 frames (about 1/3 of the turn) moved nothing on screen.
+
+Fix (book-phone.js):
+- `grabPoint`: the lift point is moved out along the fold direction until the corner is exactly at the fold at rest, so there is no snap.
+- `visiblePace`: D is timed by the largest on-screen motion of the page edges, the crest and the shadow's far edge. Each stretch takes the most motion near it, then that is averaged, so the pace changes gradually when one feature hands over to another. Then `cappedEase(1.8)` over the same 1100 ms. The table is built while idle, and again after a resize.
+- Simulated result: at most 25 px a frame (36 before, plus the 50 px snap), a steady middle, and no dead third at the end. Shape and duration are unchanged.
+- Comparison on a phone: `?curve=capped` is the previous turn exactly. `?curve=now` is the cubic. `?peak=1.5` tries a lower cap. `?fps` shows the readout, and lastTurn.curve says which pace ran.
+- tests/book-phone-visible-pace.test.cjs is new (no snap, monotonic table, under 28 px a frame on four phone sizes). book-phone.js?v=20260925-visible. Checked in headless Chromium: turns and a riffle to Contact, no errors.
+
 ## 2026-09-25 — Phone: Work dashboard no longer blanks at a turn
 
 User's iPhone screen recording (13:54, 60 fps, checked frame by frame): on Work, pressing next showed the page with the dashboard picture as an empty grey box. The same blank sheet then turned. Coming back to Work, the page landed blank and the picture popped in about 0.2 s later. The Home→Work turn just before had the picture, so only some snapshots were affected.

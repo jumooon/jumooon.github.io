@@ -142,6 +142,71 @@ window.createBookPhone = function(core) {
     const dc=(C.x+reach+rMax*n.x+2)*n.x;
     return 2*dc-PI*rMax;
   }
+  // Where a turn lifts the page from. The point is near the bottom corner, as
+  // before, but moved out along the fold's direction until the corner itself
+  // is at the fold at rest. With the tilt, the corner below the old point sat
+  // past the fold from the first instant, so the first frame of every turn
+  // flipped a 25x140 px triangle over at once (a 50 px jump; measured in the
+  // simulation, and seen in the recordings as a snap at the corner).
+  function grabPoint(w,h,n){
+    const C={x:w,y:h*.8},d0=Math.max(0,(w-C.x)*n.x+(h-C.y)*n.y);
+    return {x:C.x+n.x*d0,y:C.y+n.y*d0};
+  }
+  // The turn's pace, in what can be seen. The fold travels a distance D, but
+  // what moves on screen is not D: while the turned-over edge crosses the
+  // screen it moves at the full speed of D, once it has left only the crest
+  // and its shadow move, at half that, and the last part of D, where the page
+  // is off the screen except for the fading shadow, moves nothing at all. Timed
+  // by D, the edge crossed at up to 36 px a frame (at 60 Hz, on a 390 px
+  // phone), the crest then dropped to half that at once, and about a third of
+  // the turn showed nothing moving. So D is timed by the visible motion
+  // instead: the page's edges, the crest and the shadow's far edge are
+  // followed, and the most any of them moves on screen is spread evenly by the
+  // ease. The same turn then peaks near 23 px a frame, and slows gradually
+  // (simulated: tests/book-phone-pace.test.cjs).
+  // The table depends only on the page size and the fold, so it is kept.
+  const paceTables=new Map();
+  function visiblePace(C,n,rMax,w,h,gone){
+    const key=[w,h,C.x,C.y,n.x,n.y,rMax].join(':');
+    if(paceTables.has(key))return paceTables.get(key);
+    // Followed points: the page's right, top and bottom edges (finely: near
+    // the corner the turned-over edge runs just inside the screen), then the
+    // crest and the shadow's far edge at 17 heights.
+    const K=240,E=48,SHADOW=56,ROWS=17,N=3*(E+1)+2*ROWS;
+    const px=new Float64Array(N),py=new Float64Array(N),qx=new Float64Array(N),qy=new Float64Array(N);
+    const at=(D,ox,oy)=>{
+      const f=foldFor(C,n,D,rMax);let j=0;
+      for(let k=0;k<=E;k++)for(const [x,y] of [[w,h*k/E],[w*k/E,0],[w*k/E,h]]){const q=foldPoint(x,y,f);ox[j]=q.x;oy[j]=q.y;j++}
+      for(let k=0;k<ROWS;k++){const y=h*k/(ROWS-1),ax=f.P.x-(y-f.P.y)*n.y/n.x;ox[j]=ax+f.R*n.x;oy[j]=y;j++;ox[j]=ax+(f.R+SHADOW)*n.x;oy[j]=y;j++}
+    };
+    const seen=(x,y)=>x>=0&&x<=w&&y>=0&&y<=h;
+    const step=new Float64Array(K);let bx=px,by=py,cx=qx,cy=qy;
+    at(0,bx,by);
+    for(let k=1;k<=K;k++){
+      at(gone*k/K,cx,cy);let most=0;
+      for(let j=0;j<N;j++)if(seen(cx[j],cy[j])||seen(bx[j],by[j]))most=Math.max(most,Math.hypot(cx[j]-bx[j],cy[j]-by[j]));
+      // A little time for every stretch, so nothing is ever skipped outright.
+      step[k-1]=Math.max(most,.12*gone/K);
+      [bx,cx]=[cx,bx];[by,cy]=[cy,by];
+    }
+    // Where one feature hands over to another (the turned edge leaving, the
+    // crest carrying on), the pace changes gradually: each stretch first takes
+    // the most motion near it (so the pace never runs ahead of a feature just
+    // about to leave), and that is then averaged.
+    const W=6,near=new Float64Array(K),u=new Float64Array(K+1);
+    for(let k=0;k<K;k++){let m=0;for(let j=Math.max(0,k-W);j<=Math.min(K-1,k+W);j++)m=Math.max(m,step[j]);near[k]=m}
+    for(let k=0;k<K;k++){let sum=0,c=0;for(let j=Math.max(0,k-W);j<=Math.min(K-1,k+W);j++){sum+=near[j];c++}u[k+1]=u[k]+sum/c}
+    const total=u[K];
+    const toD=v=>{
+      if(v<=0)return 0;if(v>=1)return gone;
+      const t=v*total;let lo=0,hi=K;
+      while(hi-lo>1){const mid=(lo+hi)>>1;if(u[mid]<=t)lo=mid;else hi=mid}
+      return gone*(lo+(t-u[lo])/Math.max(1e-9,u[hi]-u[lo]))/K;
+    };
+    if(paceTables.size>=4)paceTables.delete(paceTables.keys().next().value);
+    paceTables.set(key,toD);
+    return toD;
+  }
   function createCurlRenderer(){
     const canvas=document.createElement('canvas');canvas.className='paper-mesh';
     const attributes={alpha:true,antialias:true,premultipliedAlpha:true,powerPreference:'high-performance'};
@@ -302,7 +367,7 @@ window.createBookPhone = function(core) {
   function beginCurl(target,opts={}){
     const from=core.current,forward=target>from;
     const w=book.clientWidth,h=book.clientHeight,rMax=Math.max(26,Math.min(60,w*.13));
-    const C=opts.C||{x:w,y:h*.8},n=opts.n||norm(1,TILT),gone=goneAt(C,n,rMax,h);
+    const n=opts.n||norm(1,TILT),C=opts.C||(PACE==='visible'?grabPoint(w,h,n):{x:w,y:h*.8}),gone=goneAt(C,n,rMax,h);
     const indices=[];
     if(forward)for(let i=from;i<target;i++)indices.push(i);else for(let i=from-1;i>=target;i--)indices.push(i);
     const key=forward?from:target;
@@ -386,12 +451,24 @@ window.createBookPhone = function(core) {
   // curves a·t³/3; a is the one steepness that makes the whole run exactly 1.
   // ?curve=now keeps the plain cubic, for side-by-side comparison.
   const TURN_PEAK=2.2;
+  function cappedEase(V){
+    const a=Math.pow(4/3*Math.pow(V,1.5)/(V-1),2),t1=Math.sqrt(V/a),head=a*t1*t1*t1/3;
+    return t=>t<=0?0:t>=1?1:t<t1?a*t*t*t/3:t<1-t1?head+V*(t-t1):1-a*(1-t)*(1-t)*(1-t)/3;
+  }
   const turnEase=(()=>{
     const V=TURN_PEAK,a=Math.pow(4/3*Math.pow(V,1.5)/(V-1),2),t1=Math.sqrt(V/a),head=a*t1*t1*t1/3;
     return t=>t<=0?0:t>=1?1:t<t1?a*t*t*t/3:t<1-t1?head+V*(t-t1):1-a*(1-t)*(1-t)*(1-t)/3;
   })();
+  // The phone turn now runs on visiblePace (see there) with a gentler cap,
+  // since the pace is now of what is seen. ?curve=capped is the previous
+  // turn exactly (grab point, timing by D, 2.2 cap), ?curve=now the plain cubic
+  // before that, for side-by-side comparison on a phone. ?peak=N tries another
+  // cap for the visible pace.
   const params=new URLSearchParams(location.search);
-  const paceOf=params.get('curve')==='now'?easeInOut:turnEase;
+  const PACE=params.get('curve')==='now'?'cubic':params.get('curve')==='capped'?'capped':'visible';
+  const VISIBLE_PEAK=Math.min(3,Math.max(1.2,+params.get('peak')||1.8));
+  const visibleEase=cappedEase(VISIBLE_PEAK);
+  const paceOf=PACE==='cubic'?easeInOut:PACE==='capped'?turnEase:visibleEase;
   // ?fps: after each turn, a small note of how it was actually drawn — frames
   // per second, frames drawn, frames missed and the longest gap — to tell a
   // 60 Hz cap (every gap ~16.7 ms) from dropped frames (gaps of 33 ms and more).
@@ -410,6 +487,7 @@ window.createBookPhone = function(core) {
       // Two frames held at the first pose before anything moves: the pages'
       // uploads and the live page's first layout land there, not mid-motion.
       let start,last,hold=2;const gaps=[];
+      const toD=PACE==='visible'?visiblePace(state.C,state.n,state.rMax,state.w,state.h,state.gone):v=>v*state.gone;
       cancelAnimationFrame(core.raf);
       function step(ts){
         if(core.active!==state)return;
@@ -419,7 +497,7 @@ window.createBookPhone = function(core) {
         const t=ts-start;
         for(const s of state.sheets){
           const e=paceOf(Math.max(0,Math.min(1,(t-s.order*RIFFLE_GAP)/dur)));
-          s.D=state.forward?e*state.gone:(1-e)*state.gone;
+          s.D=state.forward?toD(e):toD(1-e);
         }
         state.draw();
         if(t<total)core.raf=requestAnimationFrame(step);
@@ -429,7 +507,7 @@ window.createBookPhone = function(core) {
           // often, so uniformly slow frames still count as missed ones).
           const sorted=[...gaps].sort((x,y)=>x-y),frame=Math.min(1000/60,sorted[Math.floor(sorted.length*.1)]||1000/60);
           const missed=gaps.reduce((m,g)=>m+Math.max(0,Math.round(g/frame)-1),0);
-          const stats={frames:gaps.length+1,fps:Math.round(gaps.length*1000/Math.max(1,t)),refreshHz:Math.round(1000/frame),missed,longestMs:Math.round(Math.max(0,...gaps)),curve:paceOf===turnEase?'capped':'cubic'};
+          const stats={frames:gaps.length+1,fps:Math.round(gaps.length*1000/Math.max(1,t)),refreshHz:Math.round(1000/frame),missed,longestMs:Math.round(Math.max(0,...gaps)),curve:PACE==='visible'?'visible '+VISIBLE_PEAK:PACE};
           state.stats=stats;
           fpsNote?.(stats.fps+' fps  ('+stats.refreshHz+' Hz display)\n'+stats.frames+' frames, '+stats.missed+' missed\nlongest gap '+stats.longestMs+' ms · '+stats.curve);
           endCurl(state,true);
@@ -589,6 +667,18 @@ window.createBookPhone = function(core) {
     clearTimeout(peekTimer);
     if(narrow()&&core.ids[core.current]==='hero'&&core.ids.length>1&&!detailOpen()&&!seen()&&!reduced.matches)peekTimer=setTimeout(peekCurl,1500);
   }
+  // The pace table takes some tens of milliseconds to build: built while idle,
+  // for the page size now and again after a resize, so no turn waits for it.
+  function preparePace(){
+    if(PACE!=='visible'||!narrow())return;
+    const w=book.clientWidth,h=book.clientHeight;if(!w||!h)return;
+    const rMax=Math.max(26,Math.min(60,w*.13)),n=norm(1,TILT),C=grabPoint(w,h,n);
+    visiblePace(C,n,rMax,w,h,goneAt(C,n,rMax,h));
+  }
+  const whenIdle=f=>(window.requestIdleCallback?requestIdleCallback(f,{timeout:2000}):setTimeout(f,300));
+  whenIdle(preparePace);
+  let paceTimer=0;
+  addEventListener('resize',()=>{clearTimeout(paceTimer);paceTimer=setTimeout(()=>whenIdle(preparePace),400)},{passive:true});
   return {turn,cacheImage,sync,
     // For tests: the fold geometry, shared with the vertex shader.
     geometry:{foldFor,foldPoint,crestOf,goneAt}};

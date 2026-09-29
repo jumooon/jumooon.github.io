@@ -34,7 +34,8 @@
     <script defer src="contact-sun.js?v=20260924-mobile1"></script>
     <script defer src="stars.js"></script>
     <script defer src="ocean.js?v=20260924-frame"></script>
-    <script defer src="collection.js?v=20260924-bar2"></script>
+    <!-- collection.js is off with the Collection room (see the template in #book):
+    <script defer src="collection.js?v=20260924-bar2"></script> -->
     <script defer src="book-phone.js?v=20260925-visible"></script>
     <script defer src="book.js?v=20260925-race"></script>
   </head>
@@ -186,6 +187,12 @@
         </div>
       </section>
 
+      <!-- Collection is turned off for now (2026-09-28). A <template> keeps the room in
+           the file but out of the page: nothing in it is shown, loaded or counted as a
+           page. To bring it back, remove the <template> wrapper, restore the script
+           tag for collection.js above, and move the Collection entry in content.json
+           from nav.disabledLinks back into nav.links. -->
+      <template id="collection-disabled">
       <section class="art-collection" id="collection" hidden aria-labelledby="collection-title">
         <div class="shell collection-room">
           <header class="collection-heading">
@@ -211,6 +218,7 @@
           <div class="collection-bar" aria-hidden="true"><span class="collection-thumb"></span></div>
         </div>
       </section>
+      </template>
 
       <footer id="contact" hidden>
         <div class="shell">

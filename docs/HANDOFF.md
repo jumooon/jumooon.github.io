@@ -1,5 +1,13 @@
 # Portfolio page-turn handoff — 2026-09-16
 
+## 2026-09-28 — Collection turned off (desktop and phone)
+
+User: turn Collection off for now.
+- index.html: the Collection section is wrapped in `<template id="collection-disabled">`. The room stays in the file, but nothing in it is shown or loaded, and book.js does not count it as a page (it takes only `section, footer, [data-page]` children of #book). The collection.js script tag is commented out.
+- content.json: the Collection menu entry moved from `nav.links` to `nav.disabledLinks`, which content.js does not read. A note there says how to restore it.
+- Result (headless Chromium, desktop and phone): pages are Home, Work, Method, About, Contact. The menu and room guide read 00–04 ("NN / 04"). About's kicker was already "03 / Background". A link to #collection opens Home. No collection images are requested and there are no page errors. Desktop turns go About → Contact.
+- To restore: remove the template wrapper, uncomment the script tag, and move the entry back into `nav.links` between About and Contact.
+
 ## 2026-09-25 — "All work" did nothing after paging the Shiny deck (desktop)
 
 User found it: on the AS Carbon case, after paging through the live deck, "← All work" did nothing.

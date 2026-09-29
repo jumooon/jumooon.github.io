@@ -4,6 +4,13 @@
     "description": "Jiung Moon turns business questions into structured analysis and clear answers."
   },
   "nav": {
+    "disabledLinks": [
+      {
+        "label": "Collection",
+        "href": "#collection",
+        "note": "Turned off 2026-09-28. To restore: move this back into links (between About and Contact), unwrap the <template id=\"collection-disabled\"> in index.html and restore its collection.js script tag."
+      }
+    ],
     "brand": {
       "label": "Home",
       "href": "#hero"
@@ -20,10 +27,6 @@
       {
         "label": "About",
         "href": "#about"
-      },
-      {
-        "label": "Collection",
-        "href": "#collection"
       },
       {
         "label": "Contact",

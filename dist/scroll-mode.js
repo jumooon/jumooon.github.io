@@ -31,35 +31,8 @@
  const oceanScene=document.querySelector('.ocean-scene');
  const ocean=window.createOcean?.(oceanScene);
  let oceanRunning=null;
- // Touch screens (iPhone/iPad Safari): a WebGL canvas inside a section that is
- // moving under a transform animation is composited on its own. In a phone
- // recording (2026-10-01) it covered the whole screen at its resting place for
- // the length of the slide, hiding Home's name and menu and the other page,
- // and leaving Home it showed a smeared frame. So for the slide only, Home
- // shows a plain 2D copy of the (frozen) water and the live canvas is hidden;
- // the live canvas comes back the moment the slide ends. Mouse screens keep
- // the live canvas, as before.
+ // Touch screens get the pre-paint step in go() (see there).
  const touchScreen=matchMedia('(hover: none) and (pointer: coarse)');
- let still=null;
- function stillWater(){
-   if(!touchScreen.matches||!ocean?.frame)return false;
-   const live=ocean.frame();
-   if(!live||!live.width||!live.height)return false;
-   try{
-     if(!still){still=document.createElement('canvas');still.className='ocean-art ocean-surface ocean-still';still.setAttribute('aria-hidden','true');}
-     if(still.width!==live.width)still.width=live.width;
-     if(still.height!==live.height)still.height=live.height;
-     still.getContext('2d',{alpha:false}).drawImage(live,0,0);
-   }catch(e){return false;}
-   live.after(still);
-   live.style.visibility='hidden';
-   return true;
- }
- function liveWater(){
-   if(!still?.isConnected)return;
-   still.previousElementSibling?.style.removeProperty('visibility');
-   still.remove();
- }
  function runOcean(value){
    if(oceanRunning===value)return;
    oceanRunning=value;
@@ -177,13 +150,20 @@
    runOcean(false);
    from.inert=true;
    const fade=reducedMotion.matches;
-   to.style.transform=fade?'translate3d(0,0,0)':'translate3d(0,'+(direction*100)+'%,0)';
+   // Touch screens: the incoming page is first shown in place, underneath the
+   // current one (which is opaque and stays on top for the whole slide), so
+   // Safari paints all of it while it is inside the screen. Started off-screen,
+   // Home's name was not painted until the slide had ended and then popped in
+   // (iPhone recordings, 2026-10-01). The slide itself starts from the
+   // animation's first keyframe, so nothing is seen in place.
+   const prepaint=!fade&&touchScreen.matches;
+   if(prepaint)from.style.zIndex='2';
+   to.style.transform=fade||prepaint?'translate3d(0,0,0)':'translate3d(0,'+(direction*100)+'%,0)';
    if(fade)to.style.opacity='0';
    to.hidden=false;to.inert=true;
    // Coming back to Home: draw the water once now, so the sky behind the name
    // is there for the whole slide (it starts moving again when the slide ends).
-   const homeMoves=from.contains(oceanScene)||to.contains(oceanScene);
-   if(!(homeMoves&&stillWater())&&to.contains(oceanScene))ocean?.frame?.();
+   if(to.contains(oceanScene))ocean?.frame?.();
    if(from.contains(document.activeElement))document.activeElement.blur();
    to.scrollTop=fromMenu||direction>0?0:to.scrollHeight;
    // Decode only images in the incoming viewport, never the entire Work list.
@@ -208,9 +188,9 @@
    await Promise.allSettled([a.finished,b.finished]);
    to.style.transform='translate3d(0,0,0)';
    from.hidden=true;from.setAttribute('aria-hidden','true');a.cancel();b.cancel();
-   from.style.removeProperty('transform');to.style.removeProperty('opacity');
+   from.style.removeProperty('transform');from.style.removeProperty('z-index');to.style.removeProperty('opacity');
    current=index;to.inert=false;to.setAttribute('aria-hidden','false');
-   moving=false;book.classList.remove('is-sliding');sync();liveWater();resize();warmPictures(to);
+   moving=false;book.classList.remove('is-sliding');sync();resize();warmPictures(to);
    if(fromMenu){to.setAttribute('tabindex','-1');to.focus({preventScroll:true});}
    if(update&&!pendingHistory)history.pushState({page:to.id},'', '#'+to.id);
    if(pendingHistory){const route=pendingHistory;pendingHistory=null;restoreHistory(route);}

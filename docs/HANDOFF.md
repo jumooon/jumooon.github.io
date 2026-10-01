@@ -1,12 +1,15 @@
 # Portfolio page-turn handoff — 2026-09-16
 
-## 2026-10-01 — Phones: Home's name no longer vanishes during a slide
+## 2026-10-01 — Phones: Home's name popping in after a slide (second attempt)
 
-- Evidence: the user's iPhone recording of the live site (10 fps frames). While sliding into or out of Home, the screen showed only the starry water, full-screen, with no name, no ≡ menu and no other page; the name came back when the slide ended. Leaving Home, one frame showed a smeared water picture.
-- Cause (inferred from the frames, not reproduced: no WebKit here): iOS Safari composites the WebGL canvas on its own while its section moves under a transform animation, and it covered everything at its resting position.
-- Fix (`scroll-mode.js`, touch screens only via `(hover: none) and (pointer: coarse)`): for any slide that involves Home, `stillWater()` copies the frozen water into a plain 2D canvas (`.ocean-still`) and hides the live canvas; `liveWater()` restores it when the slide ends. Mouse screens are unchanged (verified: no copy made on a 1440x900 desktop run).
-- Verified in headless Chromium at 390x844 touch: copy present and live canvas hidden mid-slide both ways, removed afterwards, picture correct mid-slide; 15/15 tests. iPhone check still needed after deploy.
-- `index.html`: `scroll-mode.js?v=20261001-still`.
+- First attempt (commit f7c28a5: a 2D copy of the water during slides on touch screens) did not fix it per the user, and is removed again (its canvas copy also cost a frame at the start of the slide in headless runs).
+- Evidence (iPhone recording, 10 fps): coming back to Home, the name appeared only when the slide had ended.
+- Working theory, not reproduced (no WebKit here): Safari does not paint a page that starts the slide off-screen until it is back on screen.
+- Fix, touch screens only (`(hover: none) and (pointer: coarse)`); desktop unchanged:
+  - `scroll-mode.js` `go()`: the incoming page is first shown in place under the current one (`from` gets `z-index:2` for the slide), so it is painted while on screen; the animation's first keyframe then moves it out to start the slide.
+  - `scroll-mode.css`: `.hero-introduction{transform:translateZ(0)}` gives the name block its own layer above the water.
+- Verified headless (390x844 touch): page order and positions each frame both ways, no errors, slide start timing no worse than without the step; 15/15 tests. Needs an iPhone check.
+- `index.html`: `scroll-mode.js` and `scroll-mode.css` `?v=20261001-prepaint`.
 
 ## 2026-10-01 — Scroll mode on phones: the menu returns; Home's sky no longer flashes
 

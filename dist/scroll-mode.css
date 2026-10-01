@@ -76,3 +76,9 @@ html:has(.scroll-preview),body.scroll-preview{height:100%;overflow:hidden}
   .scroll-preview .section-menu[data-page="contact"] .room-menu-no{color:#8fabb9}
 }
 @media(max-width:760px) and (prefers-reduced-motion:reduce){.scroll-preview .menu-line{transition:none}}
+/* Touch screens: Home's name block gets its own layer, so Safari keeps it as
+   one painted surface above the water while the page slides (it sat in a layer
+   shared with the canvas and was drawn only after the slide). */
+@media(hover:none) and (pointer:coarse){
+  .scroll-preview .hero-introduction{transform:translateZ(0)}
+}

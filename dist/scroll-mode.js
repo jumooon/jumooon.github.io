@@ -24,7 +24,11 @@
  const gesturePause=180,turnDistance=48;
  let wheelGesture=null;
  const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
- const ocean=window.createOcean?.(document.querySelector('.ocean-scene'),{preserveDrawingBuffer:false});
+ // The water keeps its drawing buffer (the default). Without it (tried
+ // 2026-10-01 to save a copy per frame), a canvas shown again after Home was
+ // hidden can come back empty until the next draw on Safari, and Home's sky
+ // behind the name flashed while sliding back in.
+ const ocean=window.createOcean?.(document.querySelector('.ocean-scene'));
  let oceanRunning=null;
  function runOcean(value){
    if(oceanRunning===value)return;
@@ -46,10 +50,45 @@
        a.classList.toggle('is-active',on);
        if(on)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');
      });
+     phoneMenu(menu,page);
      page.prepend(menu);
    });
    resize();
  }
+ // Phones: the menu is the three-line button at the top left, which opens the
+ // list of rooms over the top of the page (as in the book). Wider screens keep
+ // the row of links; scroll-mode.css shows one or the other.
+ function phoneMenu(menu,page){
+   const toggle=document.createElement('button');
+   toggle.type='button';toggle.className='menu-toggle';
+   toggle.setAttribute('aria-label','Menu');toggle.setAttribute('aria-expanded','false');
+   toggle.innerHTML='<svg viewBox="0 0 20 14" aria-hidden="true"><path class="menu-line menu-line--1" d="M1 1h18"/><path class="menu-line menu-line--2" d="M1 7h18"/><path class="menu-line menu-line--3" d="M1 13h18"/></svg>';
+   const list=document.createElement('nav');
+   list.className='room-menu';list.hidden=true;list.setAttribute('aria-label','Rooms');
+   pages.forEach((p,i)=>{
+     const src=header.querySelector('a[href="#'+p.id+'"]');
+     const a=document.createElement('a');a.href='#'+p.id;
+     a.innerHTML='<span class="room-menu-no"></span><span class="room-menu-name"></span>';
+     a.firstChild.textContent=String(i).padStart(2,'0');
+     a.lastChild.textContent=((src&&(src.dataset.label||src.textContent))||p.id).trim();
+     if(p===page)a.setAttribute('aria-current','page');
+     list.append(a);
+   });
+   toggle.addEventListener('click',()=>setMenu(menu,list.hidden));
+   (menu.querySelector('.nav')||menu).prepend(toggle);
+   menu.append(list);
+ }
+ // Opening: 200 ms fade and 4 px drop (a dropdown's budget); closing is
+ // instant, so a tap on a room goes straight to the turn.
+ function setMenu(menu,open){
+   const list=menu.querySelector('.room-menu'),toggle=menu.querySelector('.menu-toggle');
+   if(!list||list.hidden===!open)return;
+   list.hidden=!open;menu.classList.toggle('menu-open',open);toggle.setAttribute('aria-expanded',String(open));
+   if(open)list.animate?.([{opacity:0,transform:reducedMotion.matches?'none':'translateY(-4px)'},{opacity:1,transform:'none'}],{duration:200,easing:'cubic-bezier(0.23, 1, 0.32, 1)'});
+ }
+ function closeMenus(){document.querySelectorAll('.section-menu.menu-open').forEach(m=>setMenu(m,false));}
+ document.addEventListener('pointerdown',e=>{if(!e.target.closest?.('.section-menu.menu-open'))closeMenus();},{passive:true});
+ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeMenus();});
  // Pictures further down the current page are loaded and decoded while the page
  // is idle, nearest first, one at a time. Otherwise a lazy picture is fetched
  // and decoded the moment the scroll reaches it, and its first paint can cost
@@ -102,6 +141,7 @@
    if(moving||index<0||index>=pages.length)return;
    if(index===current){if(fromMenu)pages[current].scrollTo({top:0,behavior:reducedMotion.matches?'instant':'smooth'});return;}
    const from=pages[current],to=pages[index],direction=index>current?1:-1;
+   closeMenus();
    moving=true;locked=true;book.classList.add('is-sliding');
    // Freeze the existing canvas before compositing the two moving surfaces.
    runOcean(false);
@@ -110,6 +150,9 @@
    to.style.transform=fade?'translate3d(0,0,0)':'translate3d(0,'+(direction*100)+'%,0)';
    if(fade)to.style.opacity='0';
    to.hidden=false;to.inert=true;
+   // Coming back to Home: draw the water once now, so the sky behind the name
+   // is there for the whole slide (it starts moving again when the slide ends).
+   if(to.querySelector('.ocean-scene'))ocean?.frame?.();
    if(from.contains(document.activeElement))document.activeElement.blur();
    to.scrollTop=fromMenu||direction>0?0:to.scrollHeight;
    // Decode only images in the incoming viewport, never the entire Work list.
@@ -228,7 +271,7 @@
  book.addEventListener('click',e=>{
    const a=e.target.closest('.section-menu a');if(!a||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey||e.button!==0)return;
    const i=pages.findIndex(p=>'#'+p.id===a.hash);if(i<0)return;
-   e.preventDefault();e.stopPropagation();go(i,true,true);
+   e.preventDefault();e.stopPropagation();closeMenus();go(i,true,true);
  },true); // Handle menus before Work's independent case-study router.
  function restoreHistory(route){
    if(moving){pendingHistory=route;return;}

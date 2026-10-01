@@ -49,3 +49,30 @@ html:has(.scroll-preview),body.scroll-preview{height:100%;overflow:hidden}
   .scroll-preview .sun-key[data-col="0"],.scroll-preview .sun-cell[data-col="0"]{grid-column:2}
   .scroll-preview .sun-key[data-col="1"],.scroll-preview .sun-cell[data-col="1"]{grid-column:3}
 }
+/* Phones: the menu button and the list of rooms (scroll-mode.js phoneMenu),
+   the same menu as the book's. Wider screens keep the row of links. */
+.scroll-preview .menu-toggle,.scroll-preview .room-menu{display:none}
+@media(max-width:760px){
+  .scroll-preview .section-menu .nav{min-height:56px;padding:0;flex-wrap:nowrap;justify-content:flex-start;gap:0}
+  .scroll-preview .section-menu .brand,.scroll-preview .section-menu .nav-links{display:none}
+  .scroll-preview .menu-toggle{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;margin-left:-12px;padding:0;border:0;background:none;color:var(--ink);cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .scroll-preview .menu-toggle svg{width:20px;height:14px;overflow:visible;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round}
+  .scroll-preview .menu-line{transform-origin:10px 7px;transition:transform .2s cubic-bezier(0.23,1,0.32,1),opacity .15s ease}
+  .scroll-preview .menu-open .menu-line--1{transform:translateY(6px) rotate(45deg)}
+  .scroll-preview .menu-open .menu-line--2{opacity:0}
+  .scroll-preview .menu-open .menu-line--3{transform:translateY(-6px) rotate(-45deg)}
+  .scroll-preview .section-menu[data-page="hero"] .menu-toggle{color:var(--sky-ink);filter:drop-shadow(0 0 6px var(--sky-halo,transparent))}
+  .scroll-preview .section-menu[data-page="contact"] .menu-toggle{color:#dfe4e3}
+  .scroll-preview .room-menu:not([hidden]){position:absolute;top:100%;left:0;right:0;display:flex;flex-direction:column;padding:4px 20px 12px;background:var(--paper);border-bottom:1px solid rgba(23,51,68,.12);box-shadow:0 16px 32px rgba(9,24,33,.10)}
+  .scroll-preview .room-menu a{display:flex;align-items:baseline;gap:18px;min-height:44px;padding:11px 0;border-top:1px solid rgba(23,51,68,.08);color:var(--ink);font-size:1.05rem;line-height:1.3;text-decoration:none;-webkit-tap-highlight-color:transparent}
+  .scroll-preview .room-menu a:first-child{border-top:0}
+  .scroll-preview .room-menu-no{min-width:2.2em;color:#6f8793;font-size:.6875rem;letter-spacing:.16em;font-variant-numeric:tabular-nums}
+  .scroll-preview .room-menu a[aria-current] .room-menu-name{font-weight:700}
+  .scroll-preview .section-menu[data-page="hero"] .room-menu{background:var(--sky-base,#1b2a44);border-bottom-color:rgba(255,255,255,.10)}
+  .scroll-preview .section-menu[data-page="hero"] .room-menu a{color:var(--sky-ink);border-top-color:rgba(255,255,255,.08)}
+  .scroll-preview .section-menu[data-page="hero"] .room-menu-no{color:var(--sky-faint,#8fabb9)}
+  .scroll-preview .section-menu[data-page="contact"] .room-menu{background:#143748;border-bottom-color:#416371}
+  .scroll-preview .section-menu[data-page="contact"] .room-menu a{color:#dfe4e3;border-top-color:rgba(255,255,255,.08)}
+  .scroll-preview .section-menu[data-page="contact"] .room-menu-no{color:#8fabb9}
+}
+@media(max-width:760px) and (prefers-reduced-motion:reduce){.scroll-preview .menu-line{transition:none}}

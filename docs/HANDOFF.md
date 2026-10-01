@@ -1,5 +1,14 @@
 # Portfolio page-turn handoff — 2026-09-16
 
+## 2026-10-01 — Scroll mode on phones: the menu returns; Home's sky no longer flashes
+
+User (phone, live site after the 621ae91 push): bring back the menu, and the name area on Home "refreshes" while going between Home and other pages.
+- Menu (scroll-mode.js `phoneMenu` / `setMenu` / `closeMenus`, scroll-mode.css): on phones (≤760px) each page's menu row is the book's three-line button at the top left. It opens the list of rooms, 00 Home … 04 Contact with the current one in bold, over the top of the page. Opening is a 200 ms fade with a 4 px drop; closing is instant. A tap on a room turns to it and closes the list; a tap outside or Escape also closes it. The colours follow the page (sky on Home, dark on Contact). Wider screens keep the row of links (checked at 1440px: the button is display:none and the links are flex).
+- Home flash: the probable cause is the `preserveDrawingBuffer:false` shipped in the motion round. A WebGL canvas shown again after its page was hidden can come back empty until the next draw (Safari), and the water only drew again after the slide ended. That could not be verified here, as there is no WebKit. Both changes keep the sky there for the whole slide:
+  - the water keeps its buffer again (createOcean default);
+  - go() draws one frame (`ocean.frame()`) as Home is unhidden, before the slide.
+- Checked in headless Chromium at 390px: the menu opens with five rooms; tapping Method turns there and closes; a tap outside closes; Contact's menu is dark; back to Home; no errors. Tests 15/15. scroll-mode.js/css?v=20261001-menu.
+
 ## 2026-10-01 — Motion fixes from Emil Kowalski's review / find skills (all applied)
 
 The user added emilkowalski/skills (find-animation-opportunities, review-animations) and asked for every finding to be fixed. Installers (npx, install.sh) were not run here.

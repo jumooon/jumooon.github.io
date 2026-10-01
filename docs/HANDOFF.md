@@ -1,5 +1,27 @@
 # Portfolio page-turn handoff — 2026-09-16
 
+## 2026-10-01 — Google Analytics 4 (G-QZ79QK31YY): rooms, originals, contact, reading depth
+
+- `dist/analytics.js` (async, right after `<meta charset>`; `?v=20261001-events`). GA4 directly, no Tag Manager.
+- Events, and the question each answers:
+  - `page_view` per room: `/`, `/work`, `/work/<case>`, `/method`, `/about`, `/contact`. Which rooms and projects are viewed. The config's page_location is updated each time (`gtag('config', id, {page_location, update:true})`), so engagement time and the other events are credited to the room. The query string is kept, so UTM links on the résumé or LinkedIn are attributed.
+  - `open_original {case_id, original_type: pdf|tableau|shiny|video|link, method: link|picture}`: an original was opened (method `picture` = a phone tap on the dashboard picture).
+  - `contact_click {method: email|linkedin|github|other}`: a contact link was clicked. To mark as a key event.
+  - `room_scroll {percent: 25|50|75|100}`: reading depth per room or case, once per threshold per visit. Only the visitor's downward scrolling counts; the page's own jumps (arriving at a room's end going back, restoring the Work list) are skipped: during a slide, within 250 ms of a room change, or upward.
+- Not sent from localhost/127.0.0.1/file:. `?notrack` leaves a browser out, `?track` undoes it.
+- GA settings:
+  - Enhanced measurement: turn off "Page changes based on browser history events".
+  - Register `case_id`, `original_type`, `method`, `percent` as event-scoped custom dimensions.
+  - Mark `contact_click` as a key event.
+  - Data retention: 14 months.
+- Not measurable: what is done inside the embedded Tableau/Shiny frames (other sites); which company a visitor is from.
+- Verified headless (390x844 touch and 1440x900, gtag stubbed), via dataLayer:
+  - the full sequence with UTM kept;
+  - `open_original` from list links (shiny/pdf) and from a Tableau picture tap (viewer still opens);
+  - `contact_click` email/linkedin;
+  - no depth counted on the All-work restore or on arriving at About's end going back;
+  - no page errors; 15/15 tests.
+
 ## 2026-10-01 — Phones: Home's name popping in after a slide (second attempt)
 
 - First attempt (commit f7c28a5: a 2D copy of the water during slides on touch screens) did not fix it per the user, and is removed again (its canvas copy also cost a frame at the start of the slide in headless runs).

@@ -285,13 +285,20 @@ section { scroll-margin-top: 24px; }
 .hero-place { position: relative; margin: 0; display: flex; align-items: center; gap: 0.45em; font-size: 1rem; line-height: 1.75; color: var(--sky-faint); }
 .place-dot { color: var(--sky-faint); }
 .place { display: inline-grid; padding: 0; margin: 0; border: 0; background: none; font: inherit; color: var(--sky-faint); cursor: pointer; transition: color .25s; }
-.place > span { grid-area: 1 / 1; white-space: nowrap; transition: opacity .35s ease; }
+.place > span { grid-area: 1 / 1; white-space: nowrap; transition: opacity .18s ease; }
 .place-time { opacity: 0; font-variant-numeric: tabular-nums; letter-spacing: .05em; }
-.place:hover .place-name, .place:focus-visible .place-name { opacity: 0; }
-.place:hover .place-time, .place:focus-visible .place-time { opacity: 1; }
-.place[aria-pressed="true"], .place:hover, .place:focus-visible { color: var(--sky-ink); }
+/* Hover only where there is a real hover (a mouse); a tap on a touch screen
+   left the time showing until the next tap elsewhere. Keyboard focus keeps it. */
+.place:focus-visible .place-name { opacity: 0; }
+.place:focus-visible .place-time { opacity: 1; }
+.place[aria-pressed="true"], .place:focus-visible { color: var(--sky-ink); }
+@media (hover: hover) and (pointer: fine) {
+  .place:hover .place-name { opacity: 0; }
+  .place:hover .place-time { opacity: 1; }
+  .place:hover { color: var(--sky-ink); }
+}
 .place:focus-visible { outline: 2px solid var(--signal); outline-offset: 4px; }
-.place-detail { position: absolute; left: 0; top: 100%; white-space: nowrap; font-size: 0.8125rem; line-height: 1.4; color: var(--sky-muted); opacity: 0; transform: translateY(-2px); transition: opacity .35s ease, transform .35s ease; pointer-events: none; }
+.place-detail { position: absolute; left: 0; top: 100%; white-space: nowrap; font-size: 0.8125rem; line-height: 1.4; color: var(--sky-muted); opacity: 0; transform: translateY(-2px); transition: opacity .18s cubic-bezier(0.23, 1, 0.32, 1), transform .18s cubic-bezier(0.23, 1, 0.32, 1); pointer-events: none; }
 .place-detail.is-on { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) { .place, .place > span, .place-detail { transition: none; } }
 
@@ -491,8 +498,8 @@ footer h2 { max-width: 760px; color: #fff; }
   justify-items: center;          /* a time sits under the middle of its city */
 }
 .sun-cell { white-space: nowrap; }
-.sun time { font-variant-numeric: tabular-nums; font-size: 0.8125rem; letter-spacing: .1em; line-height: 1; color: #8fabb9; transition: color .35s ease; }
-.sun-key { font-size: 0.6875rem; letter-spacing: .2em; line-height: 1; color: #55788a; white-space: nowrap; opacity: 0; transition: opacity .35s ease; }
+.sun time { font-variant-numeric: tabular-nums; font-size: 0.8125rem; letter-spacing: .1em; line-height: 1; color: #8fabb9; transition: color .18s ease; }
+.sun-key { font-size: 0.6875rem; letter-spacing: .2em; line-height: 1; color: #55788a; white-space: nowrap; opacity: 0; transition: opacity .18s cubic-bezier(0.23, 1, 0.32, 1); }
 .sun-key[data-row] { justify-self: end; }   /* the two words hug the numerals */
 .sun[data-col="0"] .sun-key[data-col="0"],
 .sun[data-col="1"] .sun-key[data-col="1"],

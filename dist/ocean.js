@@ -6,12 +6,15 @@
    five planets are drawn where they actually are. Requires astronomy.browser.min.js
    (window.Astronomy) and stars.js (window.STARS) loaded first.
    Integrated with the book's freeze/capture lifecycle (setRunning / snapshot). */
-window.createOcean = function(scene) {
+window.createOcean = function(scene, options = {}) {
   const inert = {setCity(){},setRunning(){},snapshot(){return null},frame(){return null},describe(){return null},describeCity(){return null},get city(){return 'sandiego'},get skyKey(){return 'none'}};
   if(!scene||!window.Astronomy||!window.STARS)return inert;
   const A=window.Astronomy, STARS=window.STARS;
   const canvas=document.createElement('canvas');canvas.className='ocean-art ocean-surface';canvas.setAttribute('aria-hidden','true');
-  const gl=canvas.getContext('webgl',{alpha:false,antialias:false,preserveDrawingBuffer:true,powerPreference:'low-power'});
+  // preserveDrawingBuffer keeps the last frame readable for the book's page
+  // snapshots (frame()/snapshot()); scroll mode does not read it back and passes
+  // false, which spares the GPU a copy of the canvas on every frame.
+  const gl=canvas.getContext('webgl',{alpha:false,antialias:false,preserveDrawingBuffer:options.preserveDrawingBuffer!==false,powerPreference:'low-power'});
   if(!gl)return inert;
 
   // Each city looks out over its own sea: San Diego west (toward Busan across
@@ -75,11 +78,25 @@ window.createOcean = function(scene) {
         float phase=pow(max(0.,(q.y-.505)/.495),.72)*34.-time*.72;
         float a=sin(phase+sin(q.x*8.+time*.08)*.36);
         float b=sin(phase*1.61-q.x*5.-time*.19);
-        vec2 delta=vec2((a*.65+b*.35)*.00042,(a+b*.24)*.00105)*depth*.8;
+        // Wave strength: the last factor (was .8; 1.2 since 2026-10-01, the user
+        // asked for slightly stronger waves). Speed is unchanged.
+        vec2 delta=vec2((a*.65+b*.35)*.00042,(a+b*.24)*.00105)*depth*1.2;
+        // Swell: long waves that travel from the horizon toward the viewer, so
+        // the water reads as coming in rather than only shimmering in place.
+        // Same perspective mapping as the ripples above (closer = longer and
+        // faster on screen); each crest lifts the photo a little and is a touch
+        // lighter, each trough a touch darker. Added 2026-10-01 at the user's
+        // request; set SWELL_SHADE and SWELL_LIFT to 0 to turn it off.
+        const float SWELL_K=11.,SWELL_SPEED=1.05,SWELL_LIFT=.0022,SWELL_SHADE=.085;
+        float swellPhase=pow(max(0.,(q.y-.505)/.495),.72)*SWELL_K-time*SWELL_SPEED+sin(q.x*3.1+time*.05)*.55;
+        float swell=sin(swellPhase);
+        float crest=smoothstep(-.2,1.,swell);
+        delta.y+=swell*SWELL_LIFT*depth;
+        float swellShade=1.+(crest-.45)*SWELL_SHADE*depth;
         vec3 color=texture2D(photo,clamp(q+delta,vec2(.001),vec2(.999))).rgb;
         float luminance=dot(color,vec3(.2126,.7152,.0722));
         vec3 daylight=clamp(mix(vec3(luminance),color,1.15)*1.05,0.,1.);
-        daylight=mix(vec3(251.,253.,253.)/255.,daylight,.8);
+        daylight=mix(vec3(251.,253.,253.)/255.,daylight,.8)*swellShade;
         float sky=1.-smoothstep(.498,.51,q.y);
         float pixAlt=(uv.y-horizonUv)/band*altMax;
         vec2 ac=vec2(uv.x*aspect,uv.y),sunAc=vec2(sunUv.x*aspect,sunUv.y);
@@ -120,7 +137,7 @@ window.createOcean = function(scene) {
         float moonPath=exp(-pow((uv.x-moonUv.x)*aspect/(.035+.09*depth),2.))*bright*moonlight*step(0.,moonUv.x)*step(moonUv.x,1.);
         duskSea=mix(duskSea,reflectColor*(.55+.45*seaLuminance),sunPath*.68*(1.-depth*.18));
         duskSea=mix(duskSea,vec3(.85,.9,1.)*(.6+.4*seaLuminance),moonPath*.55*(1.-depth*.2));
-        duskSea*=exposure*(1.+.35*moonlight);
+        duskSea*=exposure*(1.+.35*moonlight)*swellShade;
         vec3 dusk=mix(duskSea,duskSky,sky);
         vec3 sheen=mix(B,glowColor,.35*sunSide);
         float nearHorizon=1.-smoothstep(.505,.78,q.y);

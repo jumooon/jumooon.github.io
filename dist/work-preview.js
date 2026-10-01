@@ -161,7 +161,7 @@
       // link still leads to the live deck).
       if (asset.embedType === 'tableau') {
         stage.classList.add('is-zoomable');
-        stage.addEventListener('click', () => { if (narrow.matches) zoomView(asset); });
+        stage.addEventListener('click', () => { if (narrow.matches) zoomView(asset, stage); });
       }
       figure.append(stage, node('figcaption', '', asset.caption));
       return figure;
@@ -249,7 +249,7 @@
   // double-tap to zoom, drag to pan, "Close" to leave. It moves the picture
   // with one transform (no layout per frame) and takes every gesture itself
   // (touch-action:none), so the page underneath never scrolls or zooms.
-  function zoomView(asset) {
+  function zoomView(asset, from) {
     if (document.querySelector('.zoom-view')) return;
     const view = node('div', 'zoom-view');
     view.setAttribute('role', 'dialog');
@@ -272,6 +272,15 @@
     view.append(img, close, hint);
     document.body.append(view);
     document.body.classList.add('zoom-open');
+    // Grows out of the picture that was tapped: 0.96 → 1 and a fade, 250 ms
+    // from the picture's centre; it fades away in 180 ms (opacity only with
+    // reduced motion).
+    const reduceZoom = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (from && from.getBoundingClientRect) {
+      const r = from.getBoundingClientRect();
+      view.style.transformOrigin = (r.left + r.width / 2) + 'px ' + (r.top + r.height / 2) + 'px';
+    }
+    view.animate?.([{ opacity: 0, transform: reduceZoom ? 'none' : 'scale(0.96)' }, { opacity: 1, transform: 'none' }], { duration: 250, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' });
 
     const W = () => view.clientWidth, H = () => view.clientHeight;
     const iw = asset.width, ih = asset.height;
@@ -354,11 +363,16 @@
     const onKey = e => { if (e.key === 'Escape') shut(); };
     addEventListener('resize', onResize);
     addEventListener('keydown', onKey);
+    let closing = false;
     function shut() {
+      if (closing) return;
+      closing = true;
       removeEventListener('resize', onResize);
       removeEventListener('keydown', onKey);
       document.body.classList.remove('zoom-open');
-      view.remove();
+      view.style.pointerEvents = 'none';
+      const out = view.animate?.([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: reduceZoom ? 'none' : 'scale(0.98)' }], { duration: 180, easing: 'cubic-bezier(0.23, 1, 0.32, 1)', fill: 'forwards' });
+      if (out) out.finished.then(() => view.remove(), () => view.remove()); else view.remove();
     }
     close.addEventListener('click', shut);
     close.focus({preventScroll: true});
@@ -407,6 +421,15 @@
     detail.append(result, body);
     return heading;
   }
+  // Case pages no longer appear in a cut (find-animation-opportunities): the case
+  // fades and rises 8px in 220 ms, the list fades back in 150 ms. Opacity only
+  // with reduced motion. WAAPI, so it runs on the compositor.
+  const motionReduced = matchMedia('(prefers-reduced-motion: reduce)');
+  const EASE_OUT = 'cubic-bezier(0.23, 1, 0.32, 1)';
+  function enter(el, rise, ms) {
+    if (!el.animate) return;
+    el.animate([{ opacity: 0, transform: 'translateY(' + (motionReduced.matches ? 0 : rise) + 'px)' }, { opacity: 1, transform: 'none' }], { duration: ms, easing: EASE_OUT });
+  }
   function route(requestedId) {
     document.querySelectorAll('video').forEach(video => video.pause());
     const id = typeof requestedId === 'string' ? requestedId : location.hash.slice(1);
@@ -426,12 +449,14 @@
       const heading = renderDetail(c);
       scrollRoot.scrollTo(0, 0);
       heading.focus({ preventScroll: true });
+      enter(detail, 8, 220);
     } else {
       detail.hidden = true;
       // Leaving via All work releases live embeds; no hidden sessions to reuse.
       detail.replaceChildren();
       overview.hidden = false;
       scrollRoot.scrollTo(0, listScroll);
+      enter(overview, 0, 150);
       const prior = [...collection.querySelectorAll('a')].find(a => a.hash === '#' + activeCase);
       if (prior) prior.focus({ preventScroll: true });
       const target = id.startsWith('exhibit-') ? document.getElementById(id) : null;

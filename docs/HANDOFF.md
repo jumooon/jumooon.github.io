@@ -1,5 +1,64 @@
 # Portfolio page-turn handoff — 2026-09-16
 
+## 2026-10-01 — Motion fixes from Emil Kowalski's review / find skills (all applied)
+
+The user added emilkowalski/skills (find-animation-opportunities, review-animations) and asked for every finding to be fixed. Installers (npx, install.sh) were not run here.
+- Room change (scroll-mode.js): 700 ms `cubic-bezier(.22,.72,.22,1)` became 450 ms `cubic-bezier(0.32,0.72,0,1)` (the drawer curve and budget). From the keyboard it is 240 ms `cubic-bezier(0.23,1,0.32,1)`. With reduced motion it is a 200 ms crossfade with no movement (was 0 ms). The wait before moving went from 160 ms to 60 ms at most.
+- Hover reveals (notebook.css): the city name/time swap is 180 ms, `.place-detail` 180 ms strong ease-out, and Contact's `.sun-key` / `.sun time` 180 ms (all were 350 ms). The city hover now applies only with `(hover: hover) and (pointer: fine)`; keyboard focus still shows it.
+- Case pages (work-preview.js `enter`): opening a case fades it in and lifts it 8 px over 220 ms; "All work" fades the list in over 150 ms. Opacity only with reduced motion. Uses WAAPI.
+- Phone zoom viewer: grows from the tapped picture (origin at its centre), 0.96 → 1 with a fade over 250 ms; closing fades out over 180 ms, then the viewer is removed.
+- Work picture links: `:active` scale(0.98), 160 ms ease-out (work-exhibition.css), turned off with reduced motion.
+- Water (ocean.js / scroll-mode.js): with reduced motion it shows one still frame (the real sky's colours) instead of moving, and it follows changes to that setting. `createOcean(scene, {preserveDrawingBuffer:false})` from scroll mode spares the GPU a per-frame buffer copy. The book's call keeps the default true. tests/ocean-freeze.test.cjs was updated for this.
+- Checked in headless Chromium, desktop, desktop with reduced motion, and phone: the durations and curves above, case open and close, zoom open and close (origin 195px 567px, removed after close), water stopped under reduced motion, no errors. Tests 15/15. Versions: *-motion.
+
+## 2026-10-01 — Swell: waves coming in from the horizon
+
+User: the waves should be seen moving from the back to the front, not just shimmering in place. Open-source options exist (three.js Water/Ocean, Gerstner-wave shaders), but they render a 3D ocean, need three.js, and would replace the photo-based water and its real-sky colouring. So the existing shader was extended instead.
+- ocean.js water shader: a long "swell" travelling toward the viewer, with the same perspective mapping as the ripples. Each crest lifts the photo slightly (SWELL_LIFT .0022) and lightens it, each trough darkens it (SWELL_SHADE .085), applied to both the day and the dusk/night sea. SWELL_K 11, SWELL_SPEED 1.05. Set SWELL_LIFT and SWELL_SHADE to 0 to turn it off.
+- Headless Chromium, the water's row profile over 12 frames: the band amplitude went from 0.26 to 1.21 (Busan, day) and from 0.14 to 1.05 (San Diego, night). Bands now move toward the viewer every frame (about 11–12 px per 150 ms); before, they were mostly still. No WebGL or page errors. ocean.js?v=20261001-swell.
+
+## 2026-10-01 — Stronger waves
+
+- ocean.js water shader: the wave displacement factor went from .8 to 1.2 (×1.5); the wave speed is unchanged. Note: at night (skyDark) the sea is dark by design, so the waves show less. Checked at localhost in the user's Chrome: the water is ready and running with ocean.js?v=20261001-waves. Tests 15/15.
+
+## 2026-10-01 — Review fixes: private notes out of the site, one hero picture
+
+From the full review (user: fix).
+- dist/exhibits/SOURCES.md moved to docs/exhibit-sources.md. It was served publicly (https://jumooon.github.io/exhibits/SOURCES.md answered 200). It describes the email-video redaction, including the strings searched for (the correspondent's name fragments, a domain and a postcode). After this push the URL stops serving it, but earlier commits in the repository still contain it.
+- Email case: the internal note "Local preview only. Review the recording…" is no longer shown (work-exhibits.js; kept as a comment). work-exhibits.js?v=20261001-nonote.
+- Hero still picture (index.html): src is pacific-horizon-1920.jpg, with no srcset. It is the file ocean.js loads for the water, so it downloads once. A 2x desktop also took the 3840px copy (221 KB) for a picture hidden once the water starts.
+  - Initial load is now 449 KB in 16 files on desktop (was 670 KB in 17) and 449 KB on phone (was 490).
+- Re-checked in headless Chromium at 1440 and 390 px: every page, the seven case links, back and forward, city buttons, the zoom viewer, no errors, and the water is ready. Tests 15/15.
+
+## 2026-10-01 — Email demo: "Open video" link removed (desktop and phone)
+
+- work-exhibits.js: the email entry has no link/label (kept as a comment for restoring). The Work list and the case page show no "Open video", and the video still plays on the case page. Checked in headless Chromium at 390 and 1440 px. work-exhibits.js?v=20261001-novideolink.
+
+## 2026-10-01 — Scroll mode: stuck scroll after a turn, decode at scroll time
+
+User, testing on desktop at localhost: (1) still some stutter while scrolling; (2) entering About, the scroll did not respond for a moment.
+- (2) Cause, reproduced in headless Chromium with a real wheel gesture (`Input.synthesizeScrollGesture`): a wheel gesture stays with the scroller it started on. The gesture that turned Method → About kept going to the hidden Method page (82 wheel events, About.scrollTop stayed 0). A gesture started during a slide (when the book takes no pointer) stays with the window instead. About has only ~140–400 px to scroll, so it looked stuck.
+  - Fix, scroll-mode.js `carryWheel`: each gesture is checked once, three frames after it starts. If the page has not moved although it could (not at its end, no nested scroller), the rest of that gesture's wheel steps are applied to the page directly.
+  - Checked: one 1500 px gesture from Method's bottom now turns to About and scrolls it (scrollTop 310). Normal gestures stay native and move exactly their distance (Method 200/200, Work 1000/1000), so nothing scrolls twice.
+- (1) Trace of a 4000 px scroll of Work: the main thread was idle (0.1 s of tasks, no layout or style). But 4 pictures were decoded on the raster threads as they came into view (35–58 ms each in headless): `warmPictures` skipped pictures that were already loaded, and loading is not decoding.
+  - Fix: it now calls decode() on every shown picture of the page, nearest first. After that the same trace has no decodes during the scroll, only GPU uploads.
+- Not measurable here: the real frame pacing on the user's 120 Hz display. The Chrome tab driven from here is hidden behind the app, so rAF stops.
+- scroll-mode.js?v=20261001-carry.
+
+## 2026-10-01 — Scroll mode is on; the page-turn book is off (kept)
+
+Scroll mode (scroll-mode.js / scroll-mode.css, body.scroll-preview) was added outside this log. The user chose it for the live site, with the book turned off, not deleted.
+- index.html: the book's three tags (book-phone.css, book-phone.js, book.js) are commented out, with a note on how to switch back. The book's files and tests are unchanged.
+- Moved from book-phone.css to work-exhibition.css, which both modes load: the phone-only Work link rule, the zoom viewer, and the phone "↗" rule. Without them, desktop showed the phone-only "View presentation" link, phones showed ↗ again, and the zoom viewer had no styles.
+- Contact on a phone: the book's stacked layout (times centred at the top, then links, then note) was scoped to .book-sheet. It is now repeated under .scroll-preview in scroll-mode.css.
+- Smoothness: within a page the scroll is the browser's own; nothing runs per frame. The room change is a Web Animations transform (compositor), with the ocean paused.
+  - touchmove was non-passive (`{passive:false}` with preventDefault), so every touch scroll waited for the script. It is now passive. The bounce at a page's end is turned off with `overscroll-behavior-y: none` (was contain), so nothing needs cancelling. During a slide the book takes no touches (pointer-events:none).
+  - `warmPictures`: after a room settles, and after load, its pictures are loaded and decoded while idle, nearest first, one at a time. A lazy picture is then not decoded in the middle of a scroll.
+  - Headless Chromium: every scroll-related listener is passive (window, document, #book, #work). No long tasks while scrolling Work, all 8 Work pictures ready after idle on phone, phone swipes Home→Contact one room each, `#work/investment` opens the case, and no page errors.
+  - Not verifiable here: real 120 Hz on an iPhone. Safari's default "page rendering near 60 fps" setting is reported to cap CSS/JS animations but not native scrolling; a page cannot change it. `?framecheck` measures rAF, which that same setting caps.
+- Known without the book: the music control stays hidden (book.js configured the player).
+- scroll-preview.html (from the same outside change) is the same page under another title; it was left in place.
+
 ## 2026-09-28 — Collection turned off (desktop and phone)
 
 User: turn Collection off for now.
@@ -1322,4 +1381,4 @@ WebGL or SVG rasterization fall back to immediate, accessible navigation.
 - `work-preview.js` exposes `mountWorkExhibition`; embedded mode uses the Work sheet's own scroll container and intercepts only its internal links, keeping book page navigation intact. Scoped `work-exhibition.css` avoids styling other sheets.
 - Work layout/media events invalidate its cached page texture. Videos pause on book navigation and their current frame is captured for page-turn snapshots.
 - Main-site script URLs versioned. Eight existing regression checks and JS syntax checks passed. No browser visual/performance QA was performed this turn; no official deployment.
-- Privacy review remains required before publication for the supplied email recording and the old unused screenshot. See exhibits/SOURCES.md. Preview Marketing methodological caveats also appear in the integrated renderer; content.json is preserved.
+- Privacy review remains required before publication for the supplied email recording and the old unused screenshot. See docs/exhibit-sources.md (moved out of dist/exhibits on 2026-10-01). Preview Marketing methodological caveats also appear in the integrated renderer; content.json is preserved.

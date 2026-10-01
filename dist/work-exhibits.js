@@ -4,9 +4,13 @@ window.workExhibits = {
     takeaway: 'Generate replies and summarize an email thread without leaving Gmail.',
     type: 'video', src: 'exhibits/email-demo.mp4',
     alt: 'Email Auto Generator demonstration recording.',
-    caption: 'Email Auto Generator / Product demonstration / November 2025',
-    note: 'Local preview only. Review the recording for private correspondence and contact details before publication.',
-    link: 'exhibits/email-demo.mp4', label: 'Open video'
+    caption: 'Email Auto Generator / Product demonstration / November 2025'
+    // The internal note "Local preview only. Review the recording for private
+    // correspondence and contact details before publication." was shown on the
+    // case page; removed 2026-10-01 (user). The redaction is recorded in
+    // docs/exhibit-sources.md.
+    // "Open video" link removed 2026-10-01 (user); the video plays on the page.
+    // To restore: link: 'exhibits/email-demo.mp4', label: 'Open video'
   },
   mediroute: {
     takeaway: 'The market and revenue case behind a healthcare-routing concept.',

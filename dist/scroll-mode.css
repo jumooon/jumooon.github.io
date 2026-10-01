@@ -1,0 +1,51 @@
+html:has(.scroll-preview),body.scroll-preview{height:100%;overflow:hidden}
+.scroll-preview > .site-header{display:none}
+.scroll-preview .section-menu{position:absolute;inset:0 0 auto;z-index:5;background:var(--paper)}
+.scroll-preview .book{position:fixed;inset:0;overflow:hidden}
+.scroll-preview .book>section,.scroll-preview .book>footer{position:absolute;inset:0;width:100%;height:100%;min-height:0;overflow-y:auto;overscroll-behavior-y:none;background:var(--paper)}
+.scroll-preview .book>.hero{padding-top:calc(var(--book-header-height,89px) + 56px);overflow:hidden}
+.scroll-preview .book>.work,.scroll-preview .book>.method,.scroll-preview .book>.about{padding-top:calc(var(--book-header-height,89px) + 78px)}
+.scroll-preview .book>footer{padding-top:calc(var(--book-header-height,89px) + 56px)}
+.scroll-preview.work-detail-open #work{padding-top:28px}
+.scroll-preview .book>footer{background:#143748}
+.scroll-preview .book>[hidden]{display:none!important}
+.scroll-preview .site-header[data-page="hero"]{background:transparent}
+.scroll-preview .site-header[data-page="contact"]{background:#143748}
+.scroll-preview .book>section:focus,.scroll-preview .book>footer:focus{outline:none}
+.scroll-preview .book.is-sliding>section:not([hidden]),.scroll-preview .book.is-sliding>footer:not([hidden]){will-change:transform}
+.scroll-preview .book.is-sliding{pointer-events:none}
+.scroll-preview.work-detail-open .book{top:0}
+/* The disabled music control must stay hidden without the old book controller. */
+.scroll-preview #player:has(#player-toggle:disabled){display:none}
+.scroll-preview .book>section,.scroll-preview .book>footer{transform:translate3d(0,0,0)}
+/* Preserve the existing typeface and placement; increase the Home hierarchy. */
+.scroll-preview .hero h1{font-size:clamp(40px,4.4vw,56px)}
+.scroll-preview .hero-copy{font-size:18px}
+.scroll-preview .section-menu .brand,
+.scroll-preview .section-menu .nav-links{font-size:17px}
+.scroll-preview .section-menu .nav-links{gap:32px}
+.scroll-preview .book>section,.scroll-preview .book>footer{scroll-behavior:auto}
+@media(max-width:760px){
+  .scroll-preview .hero h1{font-size:40px}
+  .scroll-preview .hero-copy{font-size:17px}
+  .scroll-preview .section-menu .brand,
+  .scroll-preview .section-menu .nav-links,
+  .scroll-preview .section-menu .nav-links a{font-size:16px}
+  .scroll-preview .section-menu .nav-links{gap:8px}
+}
+/* overscroll-behavior-y: none (was contain): no bounce at a page's end, which
+   is also what lets scroll-mode.js listen for the swipe to the next page
+   without cancelling touches (a passive listener keeps the scroll native). */
+/* Contact on a phone: the same parts in the same order as the desktop (times,
+   links, note), stacked, from the top, the times centred. The same layout the
+   book used (book-phone.css), here without the book's .book-sheet class. */
+@media(max-width:760px){
+  .scroll-preview .book>footer{align-items:flex-start}
+  .scroll-preview .footer-grid{grid-template-columns:minmax(0,1fr);gap:48px;align-items:start}
+  .scroll-preview #contact-sun{justify-self:stretch}
+  .scroll-preview .sun{display:block}
+  .scroll-preview .sun-grid{grid-template-columns:1fr max-content max-content 1fr}
+  .scroll-preview .sun-grid>.sun-key:not([data-col]),.scroll-preview .sun-key[data-row]{grid-column:1}
+  .scroll-preview .sun-key[data-col="0"],.scroll-preview .sun-cell[data-col="0"]{grid-column:2}
+  .scroll-preview .sun-key[data-col="1"],.scroll-preview .sun-cell[data-col="1"]{grid-column:3}
+}

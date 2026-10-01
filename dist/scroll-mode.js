@@ -28,8 +28,38 @@
  // 2026-10-01 to save a copy per frame), a canvas shown again after Home was
  // hidden can come back empty until the next draw on Safari, and Home's sky
  // behind the name flashed while sliding back in.
- const ocean=window.createOcean?.(document.querySelector('.ocean-scene'));
+ const oceanScene=document.querySelector('.ocean-scene');
+ const ocean=window.createOcean?.(oceanScene);
  let oceanRunning=null;
+ // Touch screens (iPhone/iPad Safari): a WebGL canvas inside a section that is
+ // moving under a transform animation is composited on its own. In a phone
+ // recording (2026-10-01) it covered the whole screen at its resting place for
+ // the length of the slide, hiding Home's name and menu and the other page,
+ // and leaving Home it showed a smeared frame. So for the slide only, Home
+ // shows a plain 2D copy of the (frozen) water and the live canvas is hidden;
+ // the live canvas comes back the moment the slide ends. Mouse screens keep
+ // the live canvas, as before.
+ const touchScreen=matchMedia('(hover: none) and (pointer: coarse)');
+ let still=null;
+ function stillWater(){
+   if(!touchScreen.matches||!ocean?.frame)return false;
+   const live=ocean.frame();
+   if(!live||!live.width||!live.height)return false;
+   try{
+     if(!still){still=document.createElement('canvas');still.className='ocean-art ocean-surface ocean-still';still.setAttribute('aria-hidden','true');}
+     if(still.width!==live.width)still.width=live.width;
+     if(still.height!==live.height)still.height=live.height;
+     still.getContext('2d',{alpha:false}).drawImage(live,0,0);
+   }catch(e){return false;}
+   live.after(still);
+   live.style.visibility='hidden';
+   return true;
+ }
+ function liveWater(){
+   if(!still?.isConnected)return;
+   still.previousElementSibling?.style.removeProperty('visibility');
+   still.remove();
+ }
  function runOcean(value){
    if(oceanRunning===value)return;
    oceanRunning=value;
@@ -152,7 +182,8 @@
    to.hidden=false;to.inert=true;
    // Coming back to Home: draw the water once now, so the sky behind the name
    // is there for the whole slide (it starts moving again when the slide ends).
-   if(to.querySelector('.ocean-scene'))ocean?.frame?.();
+   const homeMoves=from.contains(oceanScene)||to.contains(oceanScene);
+   if(!(homeMoves&&stillWater())&&to.contains(oceanScene))ocean?.frame?.();
    if(from.contains(document.activeElement))document.activeElement.blur();
    to.scrollTop=fromMenu||direction>0?0:to.scrollHeight;
    // Decode only images in the incoming viewport, never the entire Work list.
@@ -179,7 +210,7 @@
    from.hidden=true;from.setAttribute('aria-hidden','true');a.cancel();b.cancel();
    from.style.removeProperty('transform');to.style.removeProperty('opacity');
    current=index;to.inert=false;to.setAttribute('aria-hidden','false');
-   moving=false;book.classList.remove('is-sliding');sync();resize();warmPictures(to);
+   moving=false;book.classList.remove('is-sliding');sync();liveWater();resize();warmPictures(to);
    if(fromMenu){to.setAttribute('tabindex','-1');to.focus({preventScroll:true});}
    if(update&&!pendingHistory)history.pushState({page:to.id},'', '#'+to.id);
    if(pendingHistory){const route=pendingHistory;pendingHistory=null;restoreHistory(route);}

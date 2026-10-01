@@ -1,5 +1,13 @@
 # Portfolio page-turn handoff — 2026-09-16
 
+## 2026-10-01 — Phones: Home's name no longer vanishes during a slide
+
+- Evidence: the user's iPhone recording of the live site (10 fps frames). While sliding into or out of Home, the screen showed only the starry water, full-screen, with no name, no ≡ menu and no other page; the name came back when the slide ended. Leaving Home, one frame showed a smeared water picture.
+- Cause (inferred from the frames, not reproduced: no WebKit here): iOS Safari composites the WebGL canvas on its own while its section moves under a transform animation, and it covered everything at its resting position.
+- Fix (`scroll-mode.js`, touch screens only via `(hover: none) and (pointer: coarse)`): for any slide that involves Home, `stillWater()` copies the frozen water into a plain 2D canvas (`.ocean-still`) and hides the live canvas; `liveWater()` restores it when the slide ends. Mouse screens are unchanged (verified: no copy made on a 1440x900 desktop run).
+- Verified in headless Chromium at 390x844 touch: copy present and live canvas hidden mid-slide both ways, removed afterwards, picture correct mid-slide; 15/15 tests. iPhone check still needed after deploy.
+- `index.html`: `scroll-mode.js?v=20261001-still`.
+
 ## 2026-10-01 — Scroll mode on phones: the menu returns; Home's sky no longer flashes
 
 User (phone, live site after the 621ae91 push): bring back the menu, and the name area on Home "refreshes" while going between Home and other pages.

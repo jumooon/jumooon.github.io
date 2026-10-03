@@ -23,6 +23,23 @@
  // A gesture that scrolls content cannot also turn the section at its tail.
  const gesturePause=180,turnDistance=48;
  let wheelGesture=null;
+ // A new swipe, told apart from the momentum of the last one. Momentum only
+ // ever slows down, and its events keep coming every frame for a second or two
+ // after the fingers lift, so a pause in the events alone (gesturePause) does
+ // not come until it has fully died out: at a page's end the second swipe was
+ // read as the same gesture and ignored, and a page turned only on a third
+ // swipe after waiting (Mac trackpad, 2026-10-02). So a swipe also counts as
+ // new when the step size, having fallen to half its peak or less, jumps back
+ // up to at least twice its low (and by 6px or more, above the jitter of the
+ // momentum's last tiny steps). A mouse wheel's even steps never do this.
+ let wheelTrend=null;
+ function newSwipe(size,gap){
+   if(!wheelTrend||gap>=gesturePause){wheelTrend={peak:size,low:size};return gap>=gesturePause;}
+   const t=wheelTrend;
+   if(t.low<=t.peak*.5&&size>=Math.max(t.low*2,t.low+6)){wheelTrend={peak:size,low:size};return true;}
+   if(size>t.peak){t.peak=size;t.low=size;}else if(size<t.low)t.low=size;
+   return false;
+ }
  const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
  // The water keeps its drawing buffer (the default). Without it (tried
  // 2026-10-01 to save a copy per frame), a canvas shown again after Home was
@@ -230,16 +247,19 @@
  book.addEventListener('wheel',e=>{
    if(e.ctrlKey||Math.abs(e.deltaX)>Math.abs(e.deltaY)||!e.deltaY)return;
    const now=performance.now(),gap=now-lastWheel;lastWheel=now;
+   // Wheel deltas can be pixels, lines or pages; normalize before comparing.
+   const unit=e.deltaMode===1?16:e.deltaMode===2?pages[current].clientHeight:1;
+   const fresh=newSwipe(Math.abs(e.deltaY)*unit,gap);
    if(moving){carry=null;return;}
-   carryWheel(e,gap);
-   if(locked){if(gap<gesturePause)return;locked=false;wheelGesture=null;}
+   carryWheel(e,fresh?Infinity:gap);
+   if(locked){if(!fresh)return;locked=false;wheelGesture=null;}
    if(document.body.classList.contains('work-detail-open'))return;
    const d=Math.sign(e.deltaY);
    const atBoundary=edge(pages[current],d);
    // Most events only scroll the current page. Avoid walking its DOM ancestors
    // and reading computed styles until a section boundary is actually reached.
    const nestedCanScroll=atBoundary&&nested(e.target,d);
-   if(!wheelGesture||gap>=gesturePause||wheelGesture.direction!==d){
+   if(!wheelGesture||fresh||wheelGesture.direction!==d){
      wheelGesture={direction:d,eligible:atBoundary&&!nestedCanScroll,distance:0};
    }
    if(nestedCanScroll||!atBoundary){
@@ -247,8 +267,6 @@
      return;
    }
    if(!wheelGesture.eligible)return;
-   // Wheel deltas can be pixels, lines or pages; normalize before accumulating.
-   const unit=e.deltaMode===1?16:e.deltaMode===2?pages[current].clientHeight:1;
    wheelGesture.distance+=Math.abs(e.deltaY)*unit;
    if(wheelGesture.distance>=turnDistance){
      wheelGesture.eligible=false;

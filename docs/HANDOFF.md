@@ -1,5 +1,17 @@
 # Portfolio page-turn handoff — 2026-09-16
 
+## 2026-10-02 — Trackpad: a second swipe at a page's end now turns the page
+
+- Problem (user, Mac trackpad): at the end of a room, the next swipe did not turn the page; it took waiting and swiping again. A turn needs a new wheel gesture that starts at the edge, and a new gesture was only recognised after a 180 ms pause in wheel events. Trackpad momentum keeps sending events every frame for a second or two, so the second swipe was read as part of the first.
+- Fix (`scroll-mode.js` `newSwipe()`): a gesture also counts as new when the step size, after falling to half its peak or less, jumps back to at least twice its low and by at least 6 px. Momentum only slows, and a mouse wheel's steps are even, so neither triggers it. The same test unlocks the post-turn lock and starts a new `carryWheel` check. `index.html`: `scroll-mode.js?v=20261002-swipe`.
+- Verified headless desktop (synthetic wheel sequences via CDP, old vs new):
+  - re-swipe during momentum at the end: old stays, new turns once, and the remaining momentum does not turn again;
+  - one swipe plus momentum (also with ±20% noise, 3 seeds): no turn in either;
+  - pause then swipe: both turn;
+  - mouse notches every 120 ms: unchanged;
+  - 15/15 tests.
+- Not verified on a real Mac trackpad yet.
+
 ## 2026-10-01 — Google Analytics 4 (G-QZ79QK31YY): rooms, originals, contact, reading depth
 
 - `dist/analytics.js` (async, right after `<meta charset>`; `?v=20261001-events`). GA4 directly, no Tag Manager.

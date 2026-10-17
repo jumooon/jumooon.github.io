@@ -175,28 +175,25 @@
             }
           },
           {
-            "id": "marketing",
-            "title": "Marketing Mix Modeling",
+            "id": "drive-thru",
+            "title": "AI Drive-Thru Ordering Error Monitoring",
             "org": "Analytics project",
-            "role": "Budget allocation analysis",
-            "period": "Mar 2026",
-            "summary": "Modeled channel response to evaluate how a fixed marketing budget could be reallocated.",
-            "highlight": "+153%",
-            "highlightLabel": "Simulated efficiency gain",
+            "role": "Error monitoring & KPI dashboard",
+            "period": "Sep 2026",
+            "summary": "Built an Excel dashboard to monitor errors and staff interventions in simulated AI drive-thru voice orders.",
+            "highlight": "30%",
+            "highlightLabel": "Error rate · orders with 3+ special requests",
             "tags": [
-              "Python",
-              "Pandas",
-              "NumPy",
-              "OLS",
-              "Matplotlib",
-              "Seaborn"
+              "Excel",
+              "KPI dashboard",
+              "Segmentation analysis"
             ],
             "sections": {
-              "context": "The project examined the relationship between marketing-channel spending and business KPIs.",
-              "challenge": "Compare channel returns while accounting for saturation and diminishing returns to additional spending.",
-              "contribution": "I used OLS analysis to estimate channel elasticity and attribution, built a ROAS framework, and examined low-return segments for signs of ad fatigue. I then simulated a budget shift toward channels with greater growth potential.",
-              "outcome": "Reallocating 30% of underperforming budget produced a modeled 153% efficiency gain. This is a simulation result, rather than a measured campaign lift.",
-              "reflection": "The model provides a budget-allocation hypothesis. A controlled campaign test would be needed to determine whether the estimated improvement translates into incremental results."
+              "context": "AI voice systems that take restaurant drive-thru orders need a way to see where orders fail. This project used 80 synthetic drive-thru orders to design that monitoring view.",
+              "challenge": "Define metrics that separate order errors from staff interventions, and locate where failures concentrate across stores, dayparts, AI model versions and order complexity.",
+              "contribution": "I built an Excel KPI dashboard tracking error rate, intervention rate, clean completion and average service time, with filters by store, daypart, AI model version and date. I compared failure rates across segments, including by the number of special requests in an order. I shared the error-monitoring methodology with a product manager at a company developing AI drive-thru ordering systems, using the dashboard to walk through the key metrics and high-risk segments.",
+              "outcome": "Customized orders stood out as a high-risk segment: orders with three or more special requests had a 30% error rate, against 6% for simpler orders. I recommended targeted root-cause analysis for this segment.",
+              "reflection": "With 80 synthetic orders, each segment holds only a few orders, so these rates show where to look rather than how large the problem is. Real order logs would be needed to confirm the pattern and size its operational impact."
             }
           },
           {
@@ -223,28 +220,6 @@
             }
           },
           {
-            "id": "drive-thru",
-            "title": "AI Drive-Thru Ordering Error Monitoring",
-            "org": "Analytics project",
-            "role": "Error monitoring & KPI dashboard",
-            "period": "Sep 2026",
-            "summary": "Built an Excel dashboard to monitor errors and staff interventions in simulated AI drive-thru voice orders.",
-            "highlight": "30%",
-            "highlightLabel": "Error rate · orders with 3+ special requests",
-            "tags": [
-              "Excel",
-              "KPI dashboard",
-              "Segmentation analysis"
-            ],
-            "sections": {
-              "context": "AI voice systems that take restaurant drive-thru orders need a way to see where orders fail. This project used 80 synthetic drive-thru orders to design that monitoring view.",
-              "challenge": "Define metrics that separate order errors from staff interventions, and locate where failures concentrate across stores, dayparts, AI model versions and order complexity.",
-              "contribution": "I built an Excel KPI dashboard tracking error rate, intervention rate, clean completion and average service time, with filters by store, daypart, AI model version and date. I compared failure rates across segments, including by the number of special requests in an order. I shared the error-monitoring methodology with a product manager at a company developing AI drive-thru ordering systems, using the dashboard to walk through the key metrics and high-risk segments.",
-              "outcome": "Customized orders stood out as a high-risk segment: orders with three or more special requests had a 30% error rate, against 6% for simpler orders. I recommended targeted root-cause analysis for this segment.",
-              "reflection": "With 80 synthetic orders, each segment holds only a few orders, so these rates show where to look rather than how large the problem is. Real order logs would be needed to confirm the pattern and size its operational impact."
-            }
-          },
-          {
             "id": "mediroute",
             "title": "MediRoute",
             "org": "MIT AI Hackathon",
@@ -265,6 +240,34 @@
               "outcome": "The team placed sixth at the MIT AI Hackathon. My contribution focused on market sizing, commercial strategy, and the revenue model.",
               "reflection": "Market size and revenue assumptions explain the opportunity; validation with hospitals would be needed to establish adoption and operational value."
             }
+          }
+        ],
+        "disabledCases": [
+          {
+            "id": "marketing",
+            "title": "Marketing Mix Modeling",
+            "org": "Analytics project",
+            "role": "Budget allocation analysis",
+            "period": "Mar 2026",
+            "summary": "Modeled channel response to evaluate how a fixed marketing budget could be reallocated.",
+            "highlight": "+153%",
+            "highlightLabel": "Simulated efficiency gain",
+            "tags": [
+              "Python",
+              "Pandas",
+              "NumPy",
+              "OLS",
+              "Matplotlib",
+              "Seaborn"
+            ],
+            "sections": {
+              "context": "The project examined the relationship between marketing-channel spending and business KPIs.",
+              "challenge": "Compare channel returns while accounting for saturation and diminishing returns to additional spending.",
+              "contribution": "I used OLS analysis to estimate channel elasticity and attribution, built a ROAS framework, and examined low-return segments for signs of ad fatigue. I then simulated a budget shift toward channels with greater growth potential.",
+              "outcome": "Reallocating 30% of underperforming budget produced a modeled 153% efficiency gain. This is a simulation result, rather than a measured campaign lift.",
+              "reflection": "The model provides a budget-allocation hypothesis. A controlled campaign test would be needed to determine whether the estimated improvement translates into incremental results."
+            },
+            "note": "Turned off 2026-10-17 (user). work-preview.js reads only cases, so this entry is not shown or numbered and #work/marketing opens nothing. To restore: move it back into cases (it was second, after Apple Warranty Forecasting) and delete this note. Its exhibit stays in work-exhibits.js."
           }
         ]
       }

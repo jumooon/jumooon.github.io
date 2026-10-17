@@ -1,8 +1,13 @@
 # Portfolio page-turn handoff — 2026-09-16
 
-## 2026-10-17 — Work: AI Drive-Thru Ordering Error Monitoring added before MediRoute
+## 2026-10-17 — Work: Marketing Mix Modeling turned off
 
-- content.json `work.groups[projects].cases`: new case `drive-thru`, placed between Email Auto Generator and MediRoute (user's request). Text follows the user's résumé bullets; the data is synthetic (80 orders), stated in Context and Reflection. The company is not named.
+- User: turn off Projects 02 and move the later numbers up. content.json: the `marketing` case moved from `work.groups[projects].cases` to a new `disabledCases` list in the same group, with a restore note. work-preview.js reads only `cases`, so it is not shown, numbered, counted in the Work index, or reachable at #work/marketing. Its exhibit entry (work-exhibits.js), CSS and files are unchanged.
+- Projects now: 01 Apple Warranty Forecasting, 02 AI Drive-Thru Ordering Error Monitoring, 03 Email Auto Generator, 04 MediRoute. The numbers come from list position, so nothing else changed.
+
+## 2026-10-17 — Work: AI Drive-Thru Ordering Error Monitoring added as Projects 03
+
+- content.json `work.groups[projects].cases`: new case `drive-thru`, placed between Marketing Mix Modeling and Email Auto Generator (user's request; first put after Email, then swapped with it), so Projects reads Apple, Marketing, Drive-Thru, Email, MediRoute. Text follows the user's résumé bullets; the data is synthetic (80 orders), stated in Context and Reflection. The company is not named.
 - Exhibit: dist/exhibits/drive-thru.png (2000x1043, from the user's Voice_AI.png, the four charts without the KPI row; flattened on white, Lanczos), with drive-thru.webp (q90) and drive-thru-1000.webp. `workExhibits['drive-thru']` in work-exhibits.js with a note that the data is 80 synthetic orders; WEBP map entry in work-preview.js. index.html: work-exhibits.js and work-preview.js ?v=20261017-drivethru.
 - Checked: content.json round-trips with the file's own formatting; both JS files parse; 15/15 tests (assets.test confirms every named file exists). Not checked in a browser. Not committed or pushed.
 

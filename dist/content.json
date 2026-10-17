@@ -223,6 +223,28 @@
             }
           },
           {
+            "id": "drive-thru",
+            "title": "AI Drive-Thru Ordering Error Monitoring",
+            "org": "Analytics project",
+            "role": "Error monitoring & KPI dashboard",
+            "period": "Sep 2026",
+            "summary": "Built an Excel dashboard to monitor errors and staff interventions in simulated AI drive-thru voice orders.",
+            "highlight": "30%",
+            "highlightLabel": "Error rate · orders with 3+ special requests",
+            "tags": [
+              "Excel",
+              "KPI dashboard",
+              "Segmentation analysis"
+            ],
+            "sections": {
+              "context": "AI voice systems that take restaurant drive-thru orders need a way to see where orders fail. This project used 80 synthetic drive-thru orders to design that monitoring view.",
+              "challenge": "Define metrics that separate order errors from staff interventions, and locate where failures concentrate across stores, dayparts, AI model versions and order complexity.",
+              "contribution": "I built an Excel KPI dashboard tracking error rate, intervention rate, clean completion and average service time, with filters by store, daypart, AI model version and date. I compared failure rates across segments, including by the number of special requests in an order. I shared the error-monitoring methodology with a product manager at a company developing AI drive-thru ordering systems, using the dashboard to walk through the key metrics and high-risk segments.",
+              "outcome": "Customized orders stood out as a high-risk segment: orders with three or more special requests had a 30% error rate, against 6% for simpler orders. I recommended targeted root-cause analysis for this segment.",
+              "reflection": "With 80 synthetic orders, each segment holds only a few orders, so these rates show where to look rather than how large the problem is. Real order logs would be needed to confirm the pattern and size its operational impact."
+            }
+          },
+          {
             "id": "mediroute",
             "title": "MediRoute",
             "org": "MIT AI Hackathon",

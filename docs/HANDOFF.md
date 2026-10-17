@@ -1,5 +1,11 @@
 # Portfolio page-turn handoff — 2026-09-16
 
+## 2026-10-17 — Work: AI Drive-Thru Ordering Error Monitoring added before MediRoute
+
+- content.json `work.groups[projects].cases`: new case `drive-thru`, placed between Email Auto Generator and MediRoute (user's request). Text follows the user's résumé bullets; the data is synthetic (80 orders), stated in Context and Reflection. The company is not named.
+- Exhibit: dist/exhibits/drive-thru.png (2000x1043, from the user's Voice_AI.png, the four charts without the KPI row; flattened on white, Lanczos), with drive-thru.webp (q90) and drive-thru-1000.webp. `workExhibits['drive-thru']` in work-exhibits.js with a note that the data is 80 synthetic orders; WEBP map entry in work-preview.js. index.html: work-exhibits.js and work-preview.js ?v=20261017-drivethru.
+- Checked: content.json round-trips with the file's own formatting; both JS files parse; 15/15 tests (assets.test confirms every named file exists). Not checked in a browser. Not committed or pushed.
+
 ## 2026-10-02 — Trackpad: a second swipe at a page's end now turns the page
 
 - Problem (user, Mac trackpad): at the end of a room, the next swipe did not turn the page; it took waiting and swiping again. A turn needs a new wheel gesture that starts at the edge, and a new gesture was only recognised after a 180 ms pause in wheel events. Trackpad momentum keeps sending events every frame for a second or two, so the second swipe was read as part of the first.

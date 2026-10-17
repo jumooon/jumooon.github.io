@@ -27,7 +27,7 @@
   // 1x). A <picture> offers them first; the original JPEG/PNG stays the <img>
   // src, for any browser without WebP. A third to a fifth of the bytes.
   const WEBP = {
-    'exhibits/mediroute-presentation.jpg': [], 'exhibits/mediroute-event.jpg': [],
+    'exhibits/mediroute-presentation.jpg': [], 'exhibits/mediroute-event.jpg': [], 'exhibits/drive-thru.png': [1000],
     'exhibits/investment.png': [], 'exhibits/marketing.png': [],
     'exhibits/carbon-sankey.jpg': [1000], 'exhibits/research-map.jpg': [1000],
     'exhibits/satellite.jpg': [1000], 'exhibits/apple-country-user.png': [1000]

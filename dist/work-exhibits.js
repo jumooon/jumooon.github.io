@@ -12,6 +12,13 @@ window.workExhibits = {
     // "Open video" link removed 2026-10-01 (user); the video plays on the page.
     // To restore: link: 'exhibits/email-demo.mp4', label: 'Open video'
   },
+  'drive-thru': {
+    takeaway: 'Where AI drive-thru voice orders fail: by day, store, daypart and order complexity.',
+    src: 'exhibits/drive-thru.png', width: 2000, height: 1043,
+    alt: 'Excel dashboard of simulated drive-thru voice orders: daily error and intervention rates, and rates by store, daypart and modifier count.',
+    caption: 'Drive-thru voice error monitoring / Excel dashboard / Synthetic data, 80 orders',
+    note: 'Built on 80 synthetic orders; segment rates rest on a few orders each.'
+  },
   mediroute: {
     takeaway: 'The market and revenue case behind a healthcare-routing concept.',
     layout: 'pair',
